@@ -118,6 +118,10 @@ export default function AuthView() {
                 });
 
                 await databaseService.ensureDefaultProject(data.user.id, displayName);
+                if (isInviteLink) {
+                    const inviteId = params.get('inviteProjectId');
+                    if (inviteId) await databaseService.joinProject(inviteId, data.user.id);
+                }
                 await databaseService.checkAndProcessInvitations(data.user.id, identifier);
                 window.location.reload();
             }
@@ -186,6 +190,10 @@ export default function AuthView() {
                 });
 
                 await databaseService.ensureDefaultProject(data.user.id, displayName);
+                if (isInviteLink) {
+                    const inviteId = params.get('inviteProjectId');
+                    if (inviteId) await databaseService.joinProject(inviteId, data.user.id);
+                }
                 await databaseService.checkAndProcessInvitations(data.user.id, identifier);
                 window.location.reload();
             }

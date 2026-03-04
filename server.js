@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { GoogleGenAI } from "@google/genai";
 
 // Load environment variables from .env or .env.local
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +17,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static files from the 'dist' directory
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -91,6 +93,97 @@ app.post('/api/send-email', async (req, res) => {
   } catch (error) {
     console.error('Error sending email:', error);
     res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+// Gemini AI Proxy
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+let genAI = null;
+if (GEMINI_API_KEY) {
+  genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+}
+
+const MODELS_LIST = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash"
+];
+
+async function withRetry(fn, initialDelay = 1000) {
+  let lastError;
+  for (const modelName of MODELS_LIST) {
+    for (let i = 0; i < 2; i++) {
+      try {
+        return await fn(modelName);
+      } catch (error) {
+        lastError = error;
+        const status = error.status || (error.error?.code);
+        if (status === 404) break;
+        const isBusy = status === 503 || status === 429;
+        if (!isBusy) break;
+        const delay = initialDelay * Math.pow(2, i);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+app.post('/api/ai/process', async (req, res) => {
+  if (!genAI) {
+    return res.status(500).json({ error: 'Gemini API not configured on server' });
+  }
+
+  const { action, payload } = req.body;
+
+  try {
+    console.log(`AI Proxy request - Action: ${action}, payload keys: ${Object.keys(payload)}`);
+    let result;
+    switch (action) {
+      case 'generateStory':
+      case 'transcribe': {
+        const { base64Data, mimeType, prompt } = payload;
+        result = await withRetry(async (modelName) => {
+          console.log(`Attempting AI with model: ${modelName} for action: ${action}`);
+          const response = await genAI.models.generateContent({
+            model: modelName,
+            contents: [{
+              parts: [
+                { inlineData: { data: base64Data, mimeType } },
+                { text: prompt }
+              ]
+            }]
+          });
+          return response.text;
+        });
+        break;
+      }
+      case 'optimize':
+      case 'generatePrompts': {
+        const { prompt } = payload;
+        result = await withRetry(async (modelName) => {
+          console.log(`Attempting AI with model: ${modelName} for action: ${action}`);
+          const response = await genAI.models.generateContent({
+            model: modelName,
+            contents: [{ parts: [{ text: prompt }] }]
+          });
+          return response.text;
+        });
+        break;
+      }
+      default:
+        return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    res.json({ result });
+  } catch (error) {
+    console.error(`AI Proxy error (${action}):`, error);
+    // Extract a cleaner error message if possible
+    let errorMsg = error.message || 'AI processing failed';
+    if (error.status && error.statusText) {
+      errorMsg = `${error.status} ${error.statusText}: ${errorMsg}`;
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 

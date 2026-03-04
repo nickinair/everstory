@@ -58,14 +58,14 @@ export default function App() {
   });
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+  const [projectDetailId, setProjectDetailId] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
     return localStorage.getItem('everstory-last-project-id');
   });
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
   // Data State
   const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [stories, setStories] = useState<Story[]>([]);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -167,12 +167,14 @@ export default function App() {
 
       setProjects(userProjects as any);
 
-      let resolvedProjectId: string | null = selectedProjectId; // Use persisted ID if available
+      let resolvedProjectId: string | null = currentProjectId; // Use current state (which came from localStorage)
+
       if (pendingDeepLink) {
         const deepProject = userProjects.find((p: any) => p.id === pendingDeepLink.projectId);
         resolvedProjectId = deepProject ? deepProject.id : (userProjects[0]?.id || null);
-      } else if (!resolvedProjectId && userProjects.length > 0) {
-        resolvedProjectId = userProjects[0].id;
+      } else if (!resolvedProjectId || !userProjects.some((p: any) => p.id === resolvedProjectId)) {
+        // Fallback if no ID or ID is no longer valid
+        resolvedProjectId = userProjects[0]?.id || null;
       }
 
       if (resolvedProjectId) {
@@ -252,7 +254,71 @@ export default function App() {
   const currentProject = projects.find(p => p.id === currentProjectId);
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full bg-background-light overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-screen w-full bg-background-light overflow-hidden relative">
+      {/* Project Switcher Dropdown (Global Portal-like) */}
+      <AnimatePresence>
+        {isProjectSwitcherOpen && (
+          <div className="fixed inset-0 z-50 pointer-events-none">
+            <div
+              className="absolute inset-0 z-40 pointer-events-auto"
+              onClick={() => setIsProjectSwitcherOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute left-4 right-4 lg:left-8 lg:right-auto lg:w-64 top-16 lg:top-24 mt-2 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-100 py-2 z-50 pointer-events-auto"
+              style={{ backgroundColor: 'rgba(255,255,255,0.98)' }}
+            >
+              <div className="px-4 py-2 border-b border-gray-50">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">切换项目</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {projects.map((project) => (
+                  <button
+                    key={project.id}
+                    onClick={() => {
+                      setCurrentProjectId(project.id);
+                      setIsProjectSwitcherOpen(false);
+                    }}
+                    className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 transition-colors text-left cursor-pointer ${currentProjectId === project.id ? 'bg-accent/5' : ''
+                      }`}
+                  >
+                    <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-sm mr-3 shrink-0 ${project.ownerId === currentUser?.id ? 'bg-accent/10 text-accent' : 'bg-blue-50 text-blue-500'
+                      }`}>
+                      {project.name[0]}
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className={`text-sm font-medium truncate ${currentProjectId === project.id ? 'text-accent' : 'text-gray-700'
+                        }`}>
+                        {project.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {project.ownerId === currentUser?.id ? '我的项目' : '加入的项目'}
+                      </p>
+                    </div>
+                    {currentProjectId === project.id && (
+                      <div className="w-1.5 h-1.5 bg-accent rounded-full ml-2" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="px-2 pt-2 mt-2 border-t border-gray-50">
+                <button
+                  onClick={() => {
+                    setCurrentView('settings');
+                    setIsProjectSwitcherOpen(false);
+                  }}
+                  className="w-full flex items-center px-3 py-2 text-xs font-bold text-gray-500 hover:text-accent transition-colors cursor-pointer"
+                >
+                  <Settings className="w-3.5 h-3.5 mr-2" />
+                  管理所有项目
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       {/* Mobile Header */}
       <header className="lg:hidden bg-sidebar-dark text-white p-4 flex items-center justify-between z-30 shadow-md">
         <div className="flex items-center space-x-2">
@@ -390,69 +456,6 @@ export default function App() {
             <ChevronDown className={`w-4 h-4 text-gray-300 transition-transform ${isProjectSwitcherOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {/* Project Switcher Dropdown */}
-          <AnimatePresence>
-            {isProjectSwitcherOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsProjectSwitcherOpen(false)}
-                />
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute left-4 right-4 mt-2 backdrop-blur-sm rounded-xl shadow-2xl border border-gray-100 py-2 z-50" style={{ backgroundColor: 'rgba(255,255,255,0.98)' }}
-                >
-                  <div className="px-4 py-2 border-b border-gray-50">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">切换项目</p>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {projects.map((project) => (
-                      <button
-                        key={project.id}
-                        onClick={() => {
-                          setCurrentProjectId(project.id);
-                          setIsProjectSwitcherOpen(false);
-                        }}
-                        className={`w-full flex items-center px-4 py-3 hover:bg-gray-50 transition-colors text-left cursor-pointer ${currentProjectId === project.id ? 'bg-accent/5' : ''
-                          }`}
-                      >
-                        <div className={`w-8 h-8 rounded flex items-center justify-center font-bold text-sm mr-3 shrink-0 ${project.ownerId === currentUser?.id ? 'bg-accent/10 text-accent' : 'bg-blue-50 text-blue-500'
-                          }`}>
-                          {project.name[0]}
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                          <p className={`text-sm font-medium truncate ${currentProjectId === project.id ? 'text-accent' : 'text-gray-700'
-                            }`}>
-                            {project.name}
-                          </p>
-                          <p className="text-[10px] text-gray-400">
-                            {project.ownerId === currentUser?.id ? '我的项目' : '加入的项目'}
-                          </p>
-                        </div>
-                        {currentProjectId === project.id && (
-                          <div className="w-1.5 h-1.5 bg-accent rounded-full ml-2" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="px-2 pt-2 mt-2 border-t border-gray-50">
-                    <button
-                      onClick={() => {
-                        setCurrentView('settings');
-                        setIsProjectSwitcherOpen(false);
-                      }}
-                      className="w-full flex items-center px-3 py-2 text-xs font-bold text-gray-500 hover:text-accent transition-colors cursor-pointer"
-                    >
-                      <Settings className="w-3.5 h-3.5 mr-2" />
-                      管理所有项目
-                    </button>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
         </div>
 
         <nav className="flex-1 px-2 space-y-1">
@@ -518,7 +521,6 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-        <TencentDesk currentUser={currentUser} />
         <AnimatePresence mode="wait">
           <motion.div
             key={currentView}
@@ -698,7 +700,7 @@ export default function App() {
                   setCurrentView('home');
                 }}
                 onViewDetails={(id) => {
-                  setSelectedProjectId(id);
+                  setProjectDetailId(id);
                   setCurrentView('project-detail');
                 }}
                 onProjectCreated={() => {
@@ -706,9 +708,9 @@ export default function App() {
                 }}
               />
             )}
-            {currentView === 'project-detail' && selectedProjectId && (
+            {currentView === 'project-detail' && projectDetailId && (
               <ProjectDetailView
-                project={projects.find(p => p.id === selectedProjectId)!}
+                project={projects.find(p => p.id === projectDetailId)!}
                 currentUser={currentUser}
                 onBack={() => setCurrentView('settings')}
                 onUpdate={() => {
@@ -729,7 +731,7 @@ export default function App() {
                 onDelete={() => {
                   if (currentProjectId) fetchProjectData(currentProjectId);
                 }}
-                currentUserRole={projects.find(p => p.id === currentProjectId)?.members.find(m => (m.userId || m.id) === currentUser?.id)?.projectRole}
+                currentUserRole={projects.find(p => p.id === currentProjectId)?.members.find(m => (m.userId || (m as any).user_id || m.id) === currentUser?.id)?.projectRole}
               />
             )}
             {currentView === 'recording' && selectedPrompt && currentProjectId && (

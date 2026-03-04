@@ -728,7 +728,10 @@ export const databaseService = {
     async checkAndProcessInvitations(userId: string, identifier: string) {
         console.log(`DatabaseService: Checking invitations for ${identifier}`);
         const MOCK_INVITES_KEY = 'everstory-mock-invitations';
-        const isEmail = identifier.includes('@');
+
+        // Normalize identifier
+        const normalizedIdentifier = identifier.trim().toLowerCase();
+        const isEmail = normalizedIdentifier.includes('@');
 
         const getMockInvites = () => {
             const data = localStorage.getItem(MOCK_INVITES_KEY);
@@ -741,23 +744,54 @@ export const databaseService = {
 
         // 1. Mock
         const mockInvites = getMockInvites();
-        const matching = mockInvites.filter((inv: any) => (isEmail ? inv.email === identifier : inv.phone === identifier));
+        const matching = mockInvites.filter((inv: any) => {
+            const invEmail = inv.email?.trim().toLowerCase();
+            const invPhone = inv.phone?.trim();
+            return isEmail ? invEmail === normalizedIdentifier : invPhone === normalizedIdentifier;
+        });
+
         for (const invite of matching) {
             await this.joinProject(invite.projectId, userId);
         }
-        saveMockInvites(mockInvites.filter((inv: any) => (isEmail ? inv.email !== identifier : inv.phone !== identifier)));
 
-        // 2. Real
+        // Remove processed mock invites
+        saveMockInvites(mockInvites.filter((inv: any) => {
+            const invEmail = inv.email?.trim().toLowerCase();
+            const invPhone = inv.phone?.trim();
+            return isEmail ? invEmail !== normalizedIdentifier : invPhone !== normalizedIdentifier;
+        }));
+
+        // 2. Real - Check BOTH phone and email if available from profile
         try {
-            const field = isEmail ? 'email' : 'phone';
-            const { data: realInvites } = await supabase.from('project_invitations').select('project_id').eq(field, identifier);
-            if (realInvites) {
-                for (const inv of realInvites) {
-                    await this.joinProject(inv.project_id, userId);
-                }
-                await supabase.from('project_invitations').delete().eq(field, identifier);
+            // First, get full profile to have both identifiers
+            const { data: profile } = await supabase.from('profiles').select('email, phone').eq('id', userId).maybeSingle();
+
+            const identifiers = [];
+            if (profile?.email) identifiers.push({ field: 'email', value: profile.email.toLowerCase() });
+            if (profile?.phone) identifiers.push({ field: 'phone', value: profile.phone });
+            // Add the current identifier used for login if not already there
+            if (!identifiers.some(i => i.value === normalizedIdentifier)) {
+                identifiers.push({ field: isEmail ? 'email' : 'phone', value: normalizedIdentifier });
             }
-        } catch (e) { }
+
+            for (const idObj of identifiers) {
+                const { data: realInvites } = await supabase
+                    .from('project_invitations')
+                    .select('project_id')
+                    .eq(idObj.field, idObj.value);
+
+                if (realInvites && realInvites.length > 0) {
+                    console.log(`DatabaseService: Found ${realInvites.length} real invitations for ${idObj.value}`);
+                    for (const inv of realInvites) {
+                        await this.joinProject(inv.project_id, userId);
+                    }
+                    // Delete processed invitations
+                    await supabase.from('project_invitations').delete().eq(idObj.field, idObj.value);
+                }
+            }
+        } catch (e) {
+            console.error('DatabaseService: Error checking real invitations:', e);
+        }
     },
 
     async getProjectInvitations(projectId: string) {
@@ -789,27 +823,42 @@ export const databaseService = {
             if (project && !project.members.some((m: any) => m.userId === userId)) {
                 project.members.push({ id: 'member-' + Date.now(), userId, role: 'collaborator' });
                 saveMockData(MOCK_PROJECTS_KEY, projects);
+                console.log('DatabaseService: Mock project joined successfully');
             }
             return;
         }
 
         try {
-            const { data: existing } = await supabase
+            const { data: existing, error: checkError } = await supabase
                 .from('project_members')
                 .select('id')
                 .eq('project_id', projectId)
                 .eq('user_id', userId)
                 .maybeSingle();
 
+            if (checkError) {
+                console.error('DatabaseService: Error checking existing membership:', checkError);
+                return;
+            }
+
             if (!existing) {
-                await supabase.from('project_members').insert({
+                const { error: insertError } = await supabase.from('project_members').insert({
                     project_id: projectId,
                     user_id: userId,
                     role: 'collaborator'
                 });
+
+                if (insertError) {
+                    console.error('DatabaseService: Error inserting project member:', insertError);
+                    // This is where RLS might be failing
+                } else {
+                    console.log('DatabaseService: Real project joined successfully');
+                }
+            } else {
+                console.log('DatabaseService: User is already a member of this project');
             }
         } catch (e) {
-            console.error('Error joining project:', e);
+            console.error('DatabaseService: Unexpected error in joinProject:', e);
         }
     },
 

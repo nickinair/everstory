@@ -203,7 +203,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                 </div>
                             </div>
 
-                            <div className="pt-8 flex gap-4">
+                            <div className="pt-8 flex gap-4 hidden lg:flex">
                                 <button
                                     onClick={onBack}
                                     className="flex-1 px-8 py-4 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-all cursor-pointer"
@@ -213,6 +213,22 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                 <button
                                     onClick={() => setStep('order')}
                                     className="flex-2 px-12 py-4 bg-accent hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-accent/20 transition-all transform active:scale-95 cursor-pointer"
+                                >
+                                    下一步
+                                </button>
+                            </div>
+
+                            {/* Mobile Fixed Bottom Bar */}
+                            <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3 z-50">
+                                <button
+                                    onClick={onBack}
+                                    className="flex-1 py-4 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold active:bg-gray-50 transition-all cursor-pointer"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={() => setStep('order')}
+                                    className="flex-[2] py-4 bg-accent text-white rounded-xl font-bold shadow-lg shadow-accent/20 active:scale-95 transition-all cursor-pointer"
                                 >
                                     下一步
                                 </button>
@@ -369,7 +385,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                     )}
                                 </section>
 
-                                <div className="pt-12 flex gap-4 w-full">
+                                <div className="pt-12 flex gap-4 w-full hidden lg:flex">
                                     <button
                                         onClick={() => setStep('addons')}
                                         className="flex-1 py-4 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold hover:bg-gray-50 transition-all cursor-pointer"
@@ -402,6 +418,47 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                         }}
                                         disabled={isProcessing}
                                         className="flex-2 py-4 bg-accent hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
+                                    >
+                                        {isProcessing && <RefreshCw className="w-5 h-5 animate-spin" />}
+                                        <span>{isProcessing ? '处理中...' : '继续支付'}</span>
+                                    </button>
+                                </div>
+
+                                {/* Mobile Fixed Bottom Bar for Order Confirmation */}
+                                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex gap-3 z-50">
+                                    <button
+                                        onClick={() => setStep('addons')}
+                                        className="flex-1 py-4 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold active:bg-gray-50 transition-all cursor-pointer"
+                                    >
+                                        上一步
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (isProcessing) return;
+                                            setIsProcessing(true);
+                                            try {
+                                                await databaseService.createOrder(projectId, {
+                                                    bookTitle,
+                                                    bookSubtitle,
+                                                    bookAuthor,
+                                                    coverColor,
+                                                    imageUrl: coverImageUrl || '',
+                                                    price: totalPrice.toFixed(2),
+                                                    status: 'processing',
+                                                    recipientName,
+                                                    contactPhone,
+                                                    shippingAddress
+                                                });
+                                                setStep('complete');
+                                            } catch (error) {
+                                                console.error('Error creating order:', error);
+                                                alert('支付失败，请稍后重试。');
+                                            } finally {
+                                                setIsProcessing(false);
+                                            }
+                                        }}
+                                        disabled={isProcessing}
+                                        className="flex-[2] py-4 bg-accent text-white rounded-xl font-bold shadow-lg shadow-accent/20 active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
                                     >
                                         {isProcessing && <RefreshCw className="w-5 h-5 animate-spin" />}
                                         <span>{isProcessing ? '处理中...' : '继续支付'}</span>

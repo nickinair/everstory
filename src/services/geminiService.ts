@@ -1,52 +1,25 @@
-import { GoogleGenAI } from "@google/genai";
+// Refactored to use backend proxy to secure API keys
+const API_BASE_URL = ''; // Relative to the host
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+async function callAIProxy(action: string, payload: any) {
+  const response = await fetch(`${API_BASE_URL}/api/ai/process`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action, payload }),
+  });
 
-const MODELS_LIST = [
-  "gemini-2.5-flash",
-  "gemini-3-flash-preview",
-  "gemini-flash-latest",
-  "gemini-pro-latest"
-];
-
-async function withRetry<T>(fn: (model: string) => Promise<T>, initialDelay = 1000): Promise<T> {
-  let lastError: any;
-
-  for (const modelName of MODELS_LIST) {
-    // Try each model up to 2 times
-    for (let i = 0; i < 2; i++) {
-      try {
-        return await fn(modelName);
-      } catch (error: any) {
-        lastError = error;
-        const status = error.status || (error.error?.code);
-
-        // If it's a 404 (Not Found / No longer available), switch to next model immediately
-        if (status === 404 || error.message?.includes('404')) {
-          console.warn(`Model ${modelName} not available (404). Trying next in list...`);
-          break; // Move to next model in MODELS_LIST
-        }
-
-        // 503 Service Unavailable or 429 Too Many Requests are retryable
-        const isBusy = status === 503 || status === 429 || error.message?.includes('503') || error.message?.includes('429');
-
-        if (!isBusy) {
-          // Permanent failure for this model, try next one
-          console.error(`Permanent error for model ${modelName}:`, error.message);
-          break;
-        }
-
-        const delay = initialDelay * Math.pow(2, i);
-        console.warn(`Gemini API busy (${status}) for ${modelName}, retrying in ${delay}ms... (Attempt ${i + 1}/2)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'AI request failed');
   }
 
-  // If we exhausted all models, throw the best/last error
-  console.error("All Gemini models in fallback list failed.");
-  throw lastError;
+  const data = await response.json();
+  return data.result;
 }
+
+// Retry logic is now handled in the backend
 
 export async function generateStoryFromMedia(base64Data: string, mimeType: string) {
   const prompt = `请根据上传的媒体内容（图片或视频），提取其中的关键内容，并生成：
@@ -65,25 +38,13 @@ export async function generateStoryFromMedia(base64Data: string, mimeType: strin
 不要包含任何其他文字、Markdown 格式标记或解释。`;
 
   try {
-    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
-      model: model,
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-    }));
+    const resultText = await callAIProxy('generateStory', {
+      base64Data,
+      mimeType,
+      prompt
+    });
 
-    const text = result.response?.text?.() || result.text || "";
-    const cleanText = text.trim();
+    const cleanText = resultText.trim();
 
     // Use regex to extract JSON if Gemini wraps it in markdown code blocks
     const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
@@ -109,26 +70,14 @@ export async function transcribeMedia(base64Data: string, mimeType: string) {
 仅返回转化后的文字内容，不要包含任何其他文字或解释。请尽力识别，即使声音微弱或有底噪也要尝试提取关键信息。如果媒体中确实没有任何说话声音，请直接返回"（未检测到语音）"。`;
 
   try {
-    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
-      model: model,
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-    }));
+    const resultText = await callAIProxy('transcribe', {
+      base64Data,
+      mimeType,
+      prompt
+    });
 
-    const text = result.response?.text?.() || result.text || "（未检测到语音）";
-    console.log("Raw Gemini transcription output:", text);
-    return text.trim();
+    console.log("Raw Gemini transcription output:", resultText);
+    return resultText.trim();
   } catch (error) {
     console.error("Transcription error:", error);
     throw error;
@@ -164,17 +113,14 @@ export async function optimizeStoryContent(content: string, mode: 'first' | 'thi
 ${content}`;
 
   try {
-    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
-      model: model,
-      contents: [{ parts: [{ text: prompt }] }],
-    }));
-
-    const text = result.response?.text?.() || result.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const resultText = await callAIProxy('optimize', {
+      prompt
+    });
+    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
-    return { title: "", content: text.trim() || content };
+    return { title: "", content: resultText.trim() || content };
   } catch (error) {
     console.error("Optimize story error:", error);
     return { title: "", content: content };
@@ -192,14 +138,12 @@ export async function generateGuidedPrompts(role: string, profession: string, ke
 请直接返回这 5 条题目，每行一条，不要包含数字序号或其他文字。`;
 
   try {
-    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
-      model: model,
-      contents: [{ parts: [{ text: prompt }] }],
-    }));
+    const resultText = await callAIProxy('generatePrompts', {
+      prompt
+    });
 
-    const text = result.response?.text?.() || result.text || "";
     // Split by newline and filter out empty lines
-    return text.split("\n").map((s: string) => s.trim().replace(/^\d+\.\s*/, "")).filter((s: string) => s.length > 0).slice(0, 5);
+    return resultText.split("\n").map((s: string) => s.trim().replace(/^\d+\.\s*/, "")).filter((s: string) => s.length > 0).slice(0, 5);
   } catch (error) {
     console.error("Generate prompts error:", error);
     throw error;

@@ -656,7 +656,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
       </div>
 
       {/* Right Side: Content & Transcript */}
-      <div className="w-full lg:w-[38%] bg-white flex flex-col h-[50%] lg:h-full shadow-2xl relative">
+      <div className="w-full lg:w-[38%] bg-white flex flex-col h-[65%] lg:h-full shadow-2xl relative">
         <div className="p-4 lg:p-6 flex justify-between items-center border-b border-gray-100 shrink-0">
           <div className="flex items-center space-x-2">
             {!isEditing && (
@@ -748,20 +748,20 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   type="text"
                   value={editedTitle}
                   onChange={(e) => setEditedTitle(e.target.value)}
-                  className="w-full text-2xl lg:text-3xl font-serif text-gray-900 leading-tight border-b border-accent outline-none bg-transparent"
+                  className="w-full text-xl lg:text-3xl font-serif text-gray-900 leading-tight border-b border-accent outline-none bg-transparent"
                 />
               ) : (
-                <h1 className="text-2xl lg:text-3xl font-serif text-gray-900 leading-tight">
+                <h1 className="text-xl lg:text-3xl font-serif text-gray-900 leading-tight">
                   {editedTitle}
                 </h1>
               )}
 
-              <div className={`flex-1 flex flex-col ${isEditing ? 'mt-6' : 'space-y-4 lg:space-y-6'} text-gray-700 leading-relaxed font-serif text-base lg:text-lg min-h-0`}>
+              <div className={`flex-1 flex flex-col ${isEditing ? 'mt-6' : 'space-y-4 lg:space-y-6'} text-gray-700 leading-relaxed font-serif text-sm lg:text-lg min-h-0`}>
                 {isEditing ? (
                   <textarea
                     value={editedContent}
                     onChange={(e) => setEditedContent(e.target.value)}
-                    className="w-full flex-1 p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-accent transition-all resize-none font-serif text-base lg:text-lg"
+                    className="w-full flex-1 p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-accent transition-all resize-none font-serif text-sm lg:text-lg"
                   />
                 ) : (
                   <>
