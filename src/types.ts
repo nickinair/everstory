@@ -1,0 +1,79 @@
+export interface User {
+  id: string;
+  name?: string;
+  avatar?: string;
+  initials: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+  full_name?: string;
+  avatar_url?: string;
+}
+
+export interface Story {
+  id: string;
+  title: string;
+  content?: string;
+  imageUrl: string;
+  videoUrl?: string;
+  additionalImages?: string[];
+  type: 'video' | 'audio';
+  date: string;
+  pages?: number;
+  metadata?: Record<string, any>;
+  promptId?: string;
+}
+
+export interface Prompt {
+  id: string;
+  question: string;
+  imageUrl: string;
+  sentDate: string;
+  status: 'sent' | 'draft' | 'recorded';
+  isRecorded?: boolean;
+  category?: string;
+  recordedDate?: string;
+}
+
+export interface QuestionTemplate {
+  id: string;
+  category: string;
+  text: string;
+}
+
+export interface Order {
+  id: string;
+  bookTitle: string;
+  bookSubtitle: string;
+  bookAuthor: string;
+  coverColor: string;
+  imageUrl: string;
+  status: 'processing' | 'shipped' | 'delivered';
+  date: string;
+  price: string;
+  recipientName?: string;
+  contactPhone?: string;
+  shippingAddress?: string;
+  isExample?: boolean;
+  trackingNumber?: string;
+  logistics?: {
+    time: string;
+    description: string;
+  }[];
+}
+
+export interface ProjectMember extends User {
+  projectRole: 'owner' | 'collaborator' | 'storyteller';
+  user?: User;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  ownerId: string;
+  members: ProjectMember[];
+  createdAt: string;
+}
+
+export type ViewType = 'home' | 'stories' | 'prompts' | 'order' | 'settings' | 'account' | 'story-detail' | 'order-detail' | 'add-story' | 'project-detail' | 'recording' | 'buy-now';

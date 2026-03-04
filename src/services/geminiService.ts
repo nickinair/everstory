@@ -1,0 +1,207 @@
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+
+const MODELS_LIST = [
+  "gemini-2.5-flash",
+  "gemini-3-flash-preview",
+  "gemini-flash-latest",
+  "gemini-pro-latest"
+];
+
+async function withRetry<T>(fn: (model: string) => Promise<T>, initialDelay = 1000): Promise<T> {
+  let lastError: any;
+
+  for (const modelName of MODELS_LIST) {
+    // Try each model up to 2 times
+    for (let i = 0; i < 2; i++) {
+      try {
+        return await fn(modelName);
+      } catch (error: any) {
+        lastError = error;
+        const status = error.status || (error.error?.code);
+
+        // If it's a 404 (Not Found / No longer available), switch to next model immediately
+        if (status === 404 || error.message?.includes('404')) {
+          console.warn(`Model ${modelName} not available (404). Trying next in list...`);
+          break; // Move to next model in MODELS_LIST
+        }
+
+        // 503 Service Unavailable or 429 Too Many Requests are retryable
+        const isBusy = status === 503 || status === 429 || error.message?.includes('503') || error.message?.includes('429');
+
+        if (!isBusy) {
+          // Permanent failure for this model, try next one
+          console.error(`Permanent error for model ${modelName}:`, error.message);
+          break;
+        }
+
+        const delay = initialDelay * Math.pow(2, i);
+        console.warn(`Gemini API busy (${status}) for ${modelName}, retrying in ${delay}ms... (Attempt ${i + 1}/2)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // If we exhausted all models, throw the best/last error
+  console.error("All Gemini models in fallback list failed.");
+  throw lastError;
+}
+
+export async function generateStoryFromMedia(base64Data: string, mimeType: string) {
+  const prompt = `请根据上传的媒体内容（图片或视频），提取其中的关键内容，并生成：
+1. 一个简洁、吸引人的故事标题。
+2. 一段生动、感人的故事内容（以第一人称叙述）。
+
+在生成内容时，请注意：
+- 自动过滤掉语音中的语气词（如“呃”、“那个”、“然后”、“就是”等）。
+- 根据语义逻辑进行智能分段，并添加合适的标点符号，使阅读体验更流畅。
+
+请直接返回 JSON 格式的数据，样例如下：
+{
+  "title": "故事的标题",
+  "content": "故事的具体内容..."
+}
+不要包含任何其他文字、Markdown 格式标记或解释。`;
+
+  try {
+    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
+      model: model,
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+    }));
+
+    const text = result.response?.text?.() || result.text || "";
+    const cleanText = text.trim();
+
+    // Use regex to extract JSON if Gemini wraps it in markdown code blocks
+    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return { title: "", content: cleanText };
+  } catch (error) {
+    console.error('Failed to parse AI response:', error);
+    return { title: "", content: "" };
+  }
+}
+
+export async function transcribeMedia(base64Data: string, mimeType: string) {
+  console.log(`Transcribing media of type: ${mimeType}`);
+  const prompt = `你是一位专业的速记员和编辑。请将这段媒体内容中的语音准确地转化为文字。
+在转写过程中，请遵循以下规则：
+1. **口语过滤**：自动去除“呃”、“那个”、“然后”、“就是”、“这个”等无意义的语气词。
+2. **智能分段**：根据说话者的停顿长短和语义逻辑，自动进行合理的段落划分。
+3. **标点优化**：在合适的位置增加标点符号（逗号、句号、感叹号等），确保逻辑清晰。
+4. **保持原意**：在修整口语的同时，务必保留说话者的语气和核心表达，不要过度润色成书面语。
+
+仅返回转化后的文字内容，不要包含任何其他文字或解释。请尽力识别，即使声音微弱或有底噪也要尝试提取关键信息。如果媒体中确实没有任何说话声音，请直接返回"（未检测到语音）"。`;
+
+  try {
+    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
+      model: model,
+      contents: [
+        {
+          parts: [
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+    }));
+
+    const text = result.response?.text?.() || result.text || "（未检测到语音）";
+    console.log("Raw Gemini transcription output:", text);
+    return text.trim();
+  } catch (error) {
+    console.error("Transcription error:", error);
+    throw error;
+  }
+}
+
+export async function optimizeStoryContent(content: string, mode: 'first' | 'third' | 'cleaned') {
+  let modeDesc = '';
+  if (mode === 'first') {
+    modeDesc = '以【第一人称自述】的故事手法改写。要求：1. 将碎片化的口语转化为流畅、动人的书面语言。2. 保持真实感和共鸣力。';
+  } else if (mode === 'third') {
+    modeDesc = '以【第三人称传记】的手法改写。要求：1. 语言客观、优美、富有文学色彩。2. 逻辑严密，叙述连贯。';
+  } else {
+    modeDesc = '进行【文字精简整理】。规则：1. 【禁止改写】或替换任何原词，禁止改变表达习惯。2. 【仅允许】剔除语气词（额、那个、然后、就是）和明显的口误。3. 修正标点并分段。4. 篇幅必须与原文高度一致。';
+  }
+
+  const prompt = `你是一位专业的故事编辑。请针对以下【语音转录内容】，按照【${modeDesc}】的要求进行优化。
+  
+【核心准则】：
+1. 录音中的【语音转录文本】是创作的唯一合法来源。
+2. 【禁止】根据想象添加视频画面中的视觉细节（如环境描写、动作捕捉等），除非文本中有明确提及。
+3. 工作的核心是：【视角转换】（人称） + 【口语转书面】（去口语化）。
+4. 如果是“第一人称”或“第三人称”模式，篇幅应在原文基础上增加 100-150%。这种扩展应基于原文已有的细节进行深度挖掘，而非编造。
+5. 提取一个新的、更贴切的【故事标题】。
+6. 严格按照 JSON 格式返回，样例如下：
+{
+  "title": "...",
+  "content": "..."
+}
+不要包含任何多余文字。
+
+待优化内容：
+${content}`;
+
+  try {
+    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
+      model: model,
+      contents: [{ parts: [{ text: prompt }] }],
+    }));
+
+    const text = result.response?.text?.() || result.text || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return { title: "", content: text.trim() || content };
+  } catch (error) {
+    console.error("Optimize story error:", error);
+    return { title: "", content: content };
+  }
+}
+
+export async function generateGuidedPrompts(role: string, profession: string, keywords: string[], tone: string) {
+  const prompt = `你是一位资深的口述历史专家。请根据以下背景信息：
+讲述人角色：${role}
+讲述人职业：${profession}
+核心关键词：${keywords.join("、")}
+情绪基调：${tone}
+
+生成 5 条能引起情感共鸣、细节导向的访谈题目。题目要具体，避免空洞。
+请直接返回这 5 条题目，每行一条，不要包含数字序号或其他文字。`;
+
+  try {
+    const result = await withRetry<any>((model) => (ai as any).models.generateContent({
+      model: model,
+      contents: [{ parts: [{ text: prompt }] }],
+    }));
+
+    const text = result.response?.text?.() || result.text || "";
+    // Split by newline and filter out empty lines
+    return text.split("\n").map((s: string) => s.trim().replace(/^\d+\.\s*/, "")).filter((s: string) => s.length > 0).slice(0, 5);
+  } catch (error) {
+    console.error("Generate prompts error:", error);
+    throw error;
+  }
+}
