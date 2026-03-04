@@ -98,9 +98,14 @@ app.post('/api/send-email', async (req, res) => {
 
 // Gemini AI Proxy
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL; // Optional: for users in restricted regions
 let genAI = null;
 if (GEMINI_API_KEY) {
-  genAI = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  const options = { apiKey: GEMINI_API_KEY };
+  if (GEMINI_BASE_URL) {
+    options.httpOptions = { baseUrl: GEMINI_BASE_URL };
+  }
+  genAI = new GoogleGenAI(options);
 }
 
 const MODELS_LIST = [
