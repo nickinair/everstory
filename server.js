@@ -117,10 +117,11 @@ async function withRetry(fn, initialDelay = 1000) {
         return await fn(modelName);
       } catch (error) {
         lastError = error;
+        console.error(`Error with model ${modelName} (attempt ${i + 1}):`, error.message || error);
         const status = error.status || (error.error?.code);
-        if (status === 404) break;
+        if (status === 404) break; // Model not found, try next model
         const isBusy = status === 503 || status === 429;
-        if (!isBusy) break;
+        if (!isBusy) break; // Other error, don't retry same model
         const delay = initialDelay * Math.pow(2, i);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -183,7 +184,25 @@ app.post('/api/ai/process', async (req, res) => {
     if (error.status && error.statusText) {
       errorMsg = `${error.status} ${error.statusText}: ${errorMsg}`;
     }
+    // Include the original error data if present (for deep debugging)
+    if (error.error) {
+      errorMsg += ` - Data: ${JSON.stringify(error.error)}`;
+    }
     res.status(500).json({ error: errorMsg });
+  }
+});
+
+// Debug endpoint to list available models
+app.get('/api/ai/list-models', async (req, res) => {
+  if (!genAI) {
+    return res.status(500).json({ error: 'Gemini API not configured' });
+  }
+  try {
+    const response = await genAI.models.list();
+    res.json(response);
+  } catch (error) {
+    console.error('List models error:', error);
+    res.status(500).json({ error: error.message || 'Failed to list models', details: error.error });
   }
 });
 
