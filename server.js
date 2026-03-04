@@ -12,11 +12,14 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '.env.local') }); // Override with .env.local if present
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the 'dist' directory
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Set up Nodemailer transporter using Tencent Enterprise Email SMTP
 const transporter = nodemailer.createTransport({
@@ -89,6 +92,11 @@ app.post('/api/send-email', async (req, res) => {
     console.error('Error sending email:', error);
     res.status(500).json({ error: 'Failed to send email' });
   }
+});
+
+// All other GET requests not handled before will serve index.html (SPA support)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {

@@ -661,17 +661,18 @@ export const databaseService = {
         }
 
         try {
-            // Use insert instead of upsert to avoid requiring UPDATE RLS policies
+            // Use select to check if exists or insert with specific handling
             const { error } = await supabase.from('project_invitations').insert({
                 project_id: projectId,
                 [isEmail ? 'email' : 'phone']: identifier
             });
 
-            // Ignore unique constraint violation (code 23505) which means they are already invited
-            if (error && error.code !== '23505') {
-                console.error('Database insert error (ignoring to allow email send):', error);
-                // We deliberately DO NOT throw here. 
-                // If RLS fails (e.g., owner not in project_members), we still want the email/SMS to send.
+            if (error) {
+                if (error.code === '23505') {
+                    console.log('DatabaseService: Invitation already exists, skipping insert.');
+                } else {
+                    console.warn('Database insert error (ignoring to allow email send):', error);
+                }
             }
 
             // Trigger Email if applicable
@@ -693,7 +694,7 @@ export const databaseService = {
                 }
 
                 // Use the custom Node.js Express server instead of Supabase Edge Functions
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+                const apiUrl = import.meta.env.VITE_API_URL || '';
                 const response = await fetch(`${apiUrl}/api/send-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -706,8 +707,12 @@ export const databaseService = {
                 });
 
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Email API error details: ${errorText}`);
                     throw new Error(`Email API failed: ${response.statusText}`);
                 }
+
+                console.log(`DatabaseService: Email sent successfully to ${identifier}`);
             }
         } catch (e) {
             console.error('Error in sendInvitation:', e);

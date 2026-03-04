@@ -53,10 +53,14 @@ import UpgradeModal from './components/UpgradeModal';
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<ViewType>('home');
+  const [currentView, setCurrentView] = useState<ViewType>(() => {
+    return (localStorage.getItem('everstory-last-view') as ViewType) || 'home';
+  });
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    return localStorage.getItem('everstory-last-project-id');
+  });
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
 
   // Data State
@@ -109,7 +113,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('App: Auth State Changed:', _event, session?.user?.id);
       setSession(session);
-      if (session) fetchUserData(session.user.id);
+      if (session) fetchUserData(session.user.id, false); // Fetch in background on auth changes
       else {
         setLoading(false);
         setProjects([]);
@@ -120,8 +124,8 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserData = async (userId: string) => {
-    setLoading(true);
+  const fetchUserData = async (userId: string, showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       console.log('App: Fetching data for user:', userId);
 
@@ -163,15 +167,18 @@ export default function App() {
 
       setProjects(userProjects as any);
 
-      let resolvedProjectId: string | null = null;
+      let resolvedProjectId: string | null = selectedProjectId; // Use persisted ID if available
       if (pendingDeepLink) {
         const deepProject = userProjects.find((p: any) => p.id === pendingDeepLink.projectId);
         resolvedProjectId = deepProject ? deepProject.id : (userProjects[0]?.id || null);
-      } else if (userProjects.length > 0) {
+      } else if (!resolvedProjectId && userProjects.length > 0) {
         resolvedProjectId = userProjects[0].id;
       }
 
-      setCurrentProjectId(resolvedProjectId);
+      if (resolvedProjectId) {
+        setCurrentProjectId(resolvedProjectId);
+        localStorage.setItem('everstory-last-project-id', resolvedProjectId);
+      }
 
       // 3. Handle deep link
       if (pendingDeepLink && resolvedProjectId) {
@@ -196,9 +203,16 @@ export default function App() {
 
   useEffect(() => {
     if (currentProjectId) {
+      localStorage.setItem('everstory-last-project-id', currentProjectId);
       fetchProjectData(currentProjectId);
     }
   }, [currentProjectId]);
+
+  useEffect(() => {
+    if (currentView !== 'recording' && currentView !== 'story-detail' && currentView !== 'order-detail' && currentView !== 'add-story') {
+      localStorage.setItem('everstory-last-view', currentView);
+    }
+  }, [currentView]);
 
   const fetchProjectData = async (projectId: string) => {
     try {
