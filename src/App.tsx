@@ -53,6 +53,7 @@ import BuyNowView from './components/BuyNowView';
 import UpgradeModal from './components/UpgradeModal';
 import JoinConfirmationModal from './components/JoinConfirmationModal';
 import RedemptionView from './components/RedemptionView';
+import MembershipManagementView from './components/MembershipManagementView';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -768,7 +769,21 @@ export default function App() {
               />
             )}
             {currentView === 'account' && (
-              <AccountSettingsView currentUser={currentUser} />
+              <AccountSettingsView
+                currentUser={currentUser}
+                onNavigate={(view) => setCurrentView(view as any)}
+              />
+            )}
+            {currentView === 'membership' && (
+              <MembershipManagementView
+                currentUser={currentUser}
+                orders={orders}
+                onBack={() => setCurrentView('account')}
+                onRenew={() => {
+                  setIsOrdering(true);
+                  setCurrentView('order');
+                }}
+              />
             )}
             {currentView === 'story-detail' && selectedStoryId && stories.find(s => s.id === selectedStoryId) && (
               <StoryDetailView
