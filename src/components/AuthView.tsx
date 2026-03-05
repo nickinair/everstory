@@ -123,10 +123,7 @@ export default function AuthView() {
 
                 // Final initialization tasks
                 await databaseService.ensureDefaultProject(user.id, displayName);
-                if (isInviteLink) {
-                    const inviteId = params.get('inviteProjectId');
-                    if (inviteId) await databaseService.joinProject(inviteId, user.id);
-                }
+                // Invitations are now handled by App.tsx via a confirmation modal
                 await databaseService.checkAndProcessInvitations(user.id, identifier);
                 window.location.reload();
             }

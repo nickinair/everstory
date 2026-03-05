@@ -65,6 +65,34 @@ export const databaseService = {
         })) as Project[];
     },
 
+    async getProjectById(projectId: string) {
+        if (isMockUser(projectId)) {
+            const projects = getMockData(MOCK_PROJECTS_KEY);
+            return projects.find((p: any) => p.id === projectId);
+        }
+
+        const { data, error } = await supabase
+            .from('projects')
+            .select(`
+                *,
+                owner:profiles(*)
+            `)
+            .eq('id', projectId)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) return null;
+
+        return {
+            id: data.id,
+            name: data.name,
+            description: data.description,
+            ownerId: data.owner_id,
+            ownerName: data.owner?.full_name || '未知主人',
+            createdAt: new Date(data.created_at).toLocaleDateString('zh-CN')
+        };
+    },
+
     async createProject(name: string, description: string) {
         const { data: { user } } = await supabase.auth.getUser();
         console.log('DatabaseService.createProject - Current User:', user?.id);
@@ -800,11 +828,19 @@ export const databaseService = {
                         await this.joinProject(inv.project_id, userId);
                     }
                     // Delete processed invitations
-                    await (supabase.from('project_invitations') as any).delete().eq(idObj.field, idObj.value);
+                    await this.deleteInvitation(idObj.field, idObj.value);
                 }
             }
         } catch (e) {
             console.error('DatabaseService: Error checking real invitations:', e);
+        }
+    },
+
+    async deleteInvitation(field: 'email' | 'phone', value: string) {
+        try {
+            await (supabase.from('project_invitations') as any).delete().eq(field, value);
+        } catch (e) {
+            console.error('Error deleting invitation:', e);
         }
     },
 

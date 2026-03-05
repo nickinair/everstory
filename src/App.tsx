@@ -49,6 +49,7 @@ import RecordingFlow from './components/RecordingFlow';
 import TencentDesk, { openTencentChat } from './components/TencentDesk';
 import BuyNowView from './components/BuyNowView';
 import UpgradeModal from './components/UpgradeModal';
+import JoinConfirmationModal from './components/JoinConfirmationModal';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -80,6 +81,7 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeModalType, setUpgradeModalType] = useState<'prompts' | 'stories' | 'projects' | 'order-required'>('prompts');
+  const [pendingInviteProjectId, setPendingInviteProjectId] = useState<string | null>(null);
   // High-level restriction check
   const hasOrder = orders && orders.length > 0;
 
@@ -159,9 +161,8 @@ export default function App() {
       // Check for pending invite from URL
       const pendingInviteId = localStorage.getItem('everstory-pending-invite');
       if (pendingInviteId && !userProjects.some((p: any) => p.id === pendingInviteId)) {
-        console.log('App: Processing pending invite from URL:', pendingInviteId);
-        await databaseService.joinProject(pendingInviteId, userId);
-        userProjects = await databaseService.getProjects(); // Refresh
+        console.log('App: Setting pending invite for confirmation UI:', pendingInviteId);
+        setPendingInviteProjectId(pendingInviteId);
         localStorage.removeItem('everstory-pending-invite');
       }
 
@@ -789,6 +790,30 @@ export default function App() {
           </button>
         </nav>
       </main>
+
+      {/* Invitation Confirmation Modal */}
+      <AnimatePresence>
+        {pendingInviteProjectId && (
+          <JoinConfirmationModal
+            projectId={pendingInviteProjectId}
+            onConfirm={async () => {
+              if (currentUser && pendingInviteProjectId) {
+                await databaseService.joinProject(pendingInviteProjectId, currentUser.id);
+                // After joining, refresh projects and switch to it
+                const updatedProjects = await databaseService.getProjects();
+                setProjects(updatedProjects);
+                setCurrentProjectId(pendingInviteProjectId);
+                setPendingInviteProjectId(null);
+
+                // Cleanup invitation in DB
+                if (currentUser.email) await databaseService.deleteInvitation('email', currentUser.email);
+                if (currentUser.phone) await databaseService.deleteInvitation('phone', currentUser.phone);
+              }
+            }}
+            onCancel={() => setPendingInviteProjectId(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Recommend Modal */}
       <AnimatePresence>
