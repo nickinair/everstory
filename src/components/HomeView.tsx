@@ -51,9 +51,9 @@ export default function HomeView({
   const flowSteps = [
     {
       id: 'upgrade',
-      title: premiumStatus ? '高级会员' : '立即订购',
+      title: premiumStatus ? '尊享会员' : '立即订购',
       desc: premiumStatus
-        ? `尊敬的高级会员，您已购 ${purchasedBooksCount} 本精装传记`
+        ? `尊敬的尊享会员，您已购 ${purchasedBooksCount} 本精装传记`
         : '为至亲写下一生传记',
       icon: premiumStatus ? Star : Heart,
       color: premiumStatus ? 'text-amber-700' : 'text-amber-600',

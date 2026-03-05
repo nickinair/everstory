@@ -87,7 +87,7 @@ export default function MembershipManagementView({
                             </div>
                             <div>
                                 <h2 className="text-2xl font-bold tracking-tight">
-                                    {isPremium ? '高级会员 · 已激活' : '免费版用户'}
+                                    {isPremium ? '尊享会员 · 已激活' : '免费版用户'}
                                 </h2>
                                 <p className={`${isPremium ? 'text-amber-800' : 'text-white/70'} text-sm mt-1`}>
                                     {isPremium ? '感谢您支持长生记 Everstory' : '升级以解锁更多专业功能'}
@@ -148,7 +148,7 @@ export default function MembershipManagementView({
             </motion.div>
 
             {/* Benefits Section */}
-            <h3 className="text-lg font-bold text-gray-800 mb-6 px-2">高级版核心权益</h3>
+            <h3 className="text-lg font-bold text-gray-800 mb-6 px-2">尊享版核心权益</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                 {benefits.map((benefit, idx) => (
                     <motion.div

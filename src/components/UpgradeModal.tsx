@@ -51,7 +51,7 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: Upgra
                                     <Sparkles className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-bold text-amber-900 leading-none">高级会员特权</div>
+                                    <div className="text-sm font-bold text-amber-900 leading-none">尊享会员特权</div>
                                     <div className="text-[10px] text-amber-700/60 font-medium tracking-widest mt-1 uppercase">Premium Access</div>
                                 </div>
                             </div>

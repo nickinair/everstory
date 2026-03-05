@@ -103,7 +103,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start mb-2">
-                                        <h3 className="text-xl font-bold text-gray-800">高级会员套餐</h3>
+                                        <h3 className="text-xl font-bold text-gray-800">尊享会员套餐</h3>
                                         <div className="text-right">
                                             <span className="text-xl font-bold text-gray-900">¥399.00/年</span>
                                         </div>

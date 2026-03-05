@@ -42,7 +42,7 @@ export default function UpgradePaymentView({
         { icon: Zap, text: '无限AI故事创作与润色' },
         { icon: BookOpen, text: '包含1本价值¥599的精装传记' },
         { icon: ShieldCheck, text: '永久云端加密存储' },
-        { icon: Star, text: '尊贵高级会员标识' }
+        { icon: Star, text: '至尊尊享会员标识' }
     ];
 
     const handlePayment = async () => {
@@ -53,13 +53,13 @@ export default function UpgradePaymentView({
             if (usePoints && pointsDeduction > 0) {
                 await databaseService.spendPoints(
                     Math.round(pointsDeduction),
-                    `升级高级会员: 精装传记套餐`
+                    `升级尊享会员: 精装传记套餐`
                 );
             }
 
             // 2. Create order (membership is granted via createOrder logic)
             await databaseService.createOrder(projectId, {
-                bookTitle: '高级会员精装传记套装',
+                bookTitle: '尊享会员精装传记套装',
                 bookSubtitle: '',
                 bookAuthor: currentUser?.full_name || '',
                 coverColor: '#F59E0B',
@@ -91,7 +91,7 @@ export default function UpgradePaymentView({
                     <div className="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
                         <Sparkles className="w-10 h-10 fill-current" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">欢迎加入高级会员</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">欢迎加入尊享会员</h2>
                     <p className="text-gray-500 mb-8">
                         您的账户已成功升级。现在您可以享受无限AI创作和精选权益。
                     </p>
@@ -114,7 +114,7 @@ export default function UpgradePaymentView({
                     <button onClick={onBack} className="p-2 hover:bg-gray-50 rounded-full cursor-pointer transition-colors">
                         <ChevronLeft className="w-6 h-6 text-gray-500" />
                     </button>
-                    <h1 className="text-lg font-bold text-gray-800">升级高级会员</h1>
+                    <h1 className="text-lg font-bold text-gray-800">升级尊享会员</h1>
                     <div className="w-10" />
                 </div>
             </div>
@@ -142,10 +142,10 @@ export default function UpgradePaymentView({
                     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center">
                             <Star className="w-5 h-5 text-amber-500 mr-2" />
-                            为什么选择高级版？
+                            为什么选择尊享版？
                         </h3>
                         <p className="text-sm text-gray-500 leading-relaxed">
-                            您的故事值得被精美记录。高级会员不仅能大幅提升AI创作体验，
+                            您的故事值得被精美记录。尊享会员不仅能大幅提升AI创作体验，
                             更包含了一本线下高品质印刷的纸质传记，让回忆真正能够拿在手里，传给后代。
                         </p>
                     </div>
