@@ -286,19 +286,19 @@ export default function PromptsView({
             {members.slice(0, 4).map((member) => (
               <div
                 key={member.id}
-                className="w-7 lg:w-8 h-7 lg:h-8 rounded-full border-2 border-background-light flex items-center justify-center text-[10px] lg:text-xs font-bold shrink-0"
+                className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 relative"
                 style={{ zIndex: 10 }}
               >
                 <img
                   src={getAvatarUrl(member.user)}
                   alt={member.user?.full_name || 'User'}
-                  className="w-full h-full object-cover"
+                  className="h-full w-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               </div>
             ))}
             {members.length > 4 && (
-              <div className="w-7 lg:w-8 h-7 lg:h-8 rounded-full border-2 border-background-light bg-gray-800 flex items-center justify-center text-[10px] lg:text-xs text-white font-bold shrink-0 relative z-20">
+              <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-800 flex items-center justify-center text-[10px] lg:text-xs font-bold text-white shrink-0 relative z-20">
                 +{members.length - 4}
               </div>
             )}

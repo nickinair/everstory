@@ -119,11 +119,12 @@ export default function InviteModal({ isOpen, onClose, projectId, members, onMem
                                             {joinedMembers.map(member => (
                                                 <div key={member.id} className="flex items-center justify-between group">
                                                     <div className="flex items-center space-x-3">
-                                                        <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 font-bold text-sm shrink-0 border border-gray-100 uppercase overflow-hidden">
+                                                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden relative border border-gray-100">
                                                             <img
                                                                 src={getAvatarUrl(member.user)}
-                                                                alt=""
-                                                                className="w-full h-full object-cover"
+                                                                alt={member.user?.full_name || 'User'}
+                                                                className="h-full w-full object-cover"
+                                                                referrerPolicy="no-referrer"
                                                             />
                                                         </div>
                                                         <div className="min-w-0">

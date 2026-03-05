@@ -56,9 +56,9 @@ export const databaseService = {
                 id: m.id,
                 userId: m.user_id,
                 projectRole: m.role,
-                name: m.user?.full_name || '未知用户',
-                initials: (m.user?.full_name || '未').substring(0, 1),
-                avatar: m.user?.avatar_url,
+                name: m.user?.full_name || m.user?.phone || '未知用户',
+                initials: (m.user?.full_name || m.user?.phone || '未').substring(0, 1),
+                avatar: m.user?.avatar_url || m.user?.avatar,
                 phone: m.user?.phone,
                 ...m.user
             }))

@@ -68,7 +68,7 @@ export default function StoriesView({
             {members.slice(0, 4).map((member) => (
               <div
                 key={member.id}
-                className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 relative"
+                className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 relative"
                 style={{ zIndex: 10 }}
               >
                 <img
