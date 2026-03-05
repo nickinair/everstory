@@ -506,7 +506,7 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="px-4 py-4 space-y-4 border-t border-white/10">
+        <div className="px-4 py-3 space-y-2 border-t border-white/10">
           <button
             onClick={() => setIsRecommendModalOpen(true)}
             className="w-full flex items-center p-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg group text-left cursor-pointer transition-colors"
