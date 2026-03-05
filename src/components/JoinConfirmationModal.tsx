@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Users, X, CheckCircle2, User, Shield, Info, Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Users, CheckCircle2, Shield, Info, Loader2, UserPlus, X } from 'lucide-react';
 import { databaseService } from '../services/databaseService';
 
 interface JoinConfirmationModalProps {
@@ -14,13 +14,22 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
     const [loading, setLoading] = useState(true);
     const [joining, setJoining] = useState(false);
 
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
         const fetchProject = async () => {
             try {
+                setLoading(true);
+                setError(null);
                 const data = await databaseService.getProjectById(projectId);
-                setProject(data);
-            } catch (error) {
-                console.error('Error fetching project for confirmation:', error);
+                if (!data) {
+                    setError('找不到该项目，可能已被删除或链接无效。');
+                } else {
+                    setProject(data);
+                }
+            } catch (err) {
+                console.error('Error fetching project for confirmation:', err);
+                setError('获取项目信息失败，请检查网络连接。');
             } finally {
                 setLoading(false);
             }
@@ -34,13 +43,38 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
             onConfirm();
         } catch (error) {
             console.error('Error joining project:', error);
+            setError('加入项目失败，请稍后重试。');
         } finally {
             setJoining(false);
         }
     };
 
     if (loading) return null;
-    if (!project) return null;
+
+    // If there's an error, show a more informative screen instead of null
+    if (error || !project) {
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
+                >
+                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <X size={32} />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">邀请已失效</h2>
+                    <p className="text-gray-500 mb-8">{error || '该链接无效或项目不存在。'}</p>
+                    <button
+                        onClick={onCancel}
+                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors cursor-pointer"
+                    >
+                        返回
+                    </button>
+                </motion.div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -48,7 +82,7 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-left"
             >
                 <div className="relative h-32 bg-accent/10 flex items-center justify-center overflow-hidden">
                     <div className="absolute inset-0 opacity-10">
@@ -67,10 +101,10 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
                         <p className="text-gray-500 text-sm">在这里一起记录珍贵的人生故事</p>
                     </div>
 
-                    <div className="bg-gray-50 rounded-xl p-5 mb-8 border border-gray-100">
+                    <div className="bg-gray-50 rounded-xl p-5 mb-8 border border-gray-100 text-left">
                         <div className="flex items-center mb-4">
                             <div className="w-10 h-10 rounded-lg bg-accent/10 text-accent flex items-center justify-center font-bold mr-3">
-                                {project.name[0]}
+                                {project.name ? project.name[0] : 'P'}
                             </div>
                             <div>
                                 <h3 className="font-bold text-gray-900 leading-tight">{project.name}</h3>
@@ -81,7 +115,7 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
                         <div className="flex items-center text-sm text-gray-600 space-x-4">
                             <div className="flex items-center">
                                 <Shield className="w-3.5 h-3.5 mr-1.5 text-accent/60" />
-                                <span>所有者: {project.ownerName}</span>
+                                <span className="truncate max-w-[120px]">所有者: {project.ownerName}</span>
                             </div>
                             <div className="flex items-center">
                                 <Users className="w-3.5 h-3.5 mr-1.5 text-accent/60" />
@@ -130,4 +164,3 @@ export default function JoinConfirmationModal({ projectId, onConfirm, onCancel }
     );
 }
 
-import { UserPlus } from 'lucide-react';

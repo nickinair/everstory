@@ -158,12 +158,13 @@ export default function App() {
       // 2. Fetch Projects
       let userProjects = await databaseService.getProjects();
 
-      // Check for pending invite from URL
+      // Check for pending invite from URL or persisted state
       const pendingInviteId = localStorage.getItem('everstory-pending-invite');
       if (pendingInviteId && !userProjects.some((p: any) => p.id === pendingInviteId)) {
         console.log('App: Setting pending invite for confirmation UI:', pendingInviteId);
         setPendingInviteProjectId(pendingInviteId);
-        localStorage.removeItem('everstory-pending-invite');
+        // Note: we don't remove from localStorage here anymore, 
+        // we remove it after user explicitly joins or cancels to survive refreshes.
       }
 
       setProjects(userProjects as any);
@@ -804,13 +805,17 @@ export default function App() {
                 setProjects(updatedProjects);
                 setCurrentProjectId(pendingInviteProjectId);
                 setPendingInviteProjectId(null);
+                localStorage.removeItem('everstory-pending-invite');
 
                 // Cleanup invitation in DB
                 if (currentUser.email) await databaseService.deleteInvitation('email', currentUser.email);
                 if (currentUser.phone) await databaseService.deleteInvitation('phone', currentUser.phone);
               }
             }}
-            onCancel={() => setPendingInviteProjectId(null)}
+            onCancel={() => {
+              setPendingInviteProjectId(null);
+              localStorage.removeItem('everstory-pending-invite');
+            }}
           />
         )}
       </AnimatePresence>
