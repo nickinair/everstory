@@ -467,8 +467,8 @@ export default function App() {
       {/* Sidebar (Desktop) */}
       <aside className="hidden lg:flex w-64 bg-sidebar-dark text-white flex-col h-full flex-shrink-0">
         <div className="p-6">
-          <h1 className="text-xl font-semibold tracking-wide">长生記</h1>
-          <p className="text-sm text-gray-300 font-light">Everstory</p>
+          <h1 className="text-2xl font-serif text-white mb-1 font-bold tracking-[0.3em]">长生記</h1>
+          <p className="text-[11.5px] text-white/40 font-light tracking-[0.2em] uppercase pl-[2px]">Everstory</p>
         </div>
 
         <div className="px-4 mb-6 relative">
