@@ -58,7 +58,7 @@ export default function HomeView({
       icon: premiumStatus ? Star : Heart,
       color: premiumStatus ? 'text-amber-700' : 'text-amber-600',
       bg: premiumStatus ? 'bg-amber-100' : 'bg-amber-50',
-      action: () => onNavigate(premiumStatus ? 'order' : 'buy-now')
+      action: () => onNavigate(premiumStatus ? 'membership' : 'buy-now')
     },
     {
       id: 'invite',

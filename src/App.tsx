@@ -562,7 +562,7 @@ export default function App() {
             {currentUser?.is_premium && (
               <div className="flex items-center bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">
                 <Star className="w-2.5 h-2.5 mr-1 fill-amber-400" />
-                高级
+                尊享
               </div>
             )}
           </button>
