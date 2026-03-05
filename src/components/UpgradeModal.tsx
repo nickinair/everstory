@@ -18,7 +18,7 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: Upgra
 
     const benefits = [
         '无限次数故事录制',
-        '定制全彩精装传记',
+        '定制精装传记',
         '专业级AI深度写作',
         '永久云端音视频存储',
         '30天无忧退款保证'

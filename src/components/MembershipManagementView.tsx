@@ -112,6 +112,10 @@ export default function MembershipManagementView({
                                     <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
                                     <span className="text-sm">基础 AI 辅助体验</span>
                                 </div>
+                                <div className="flex items-center space-x-3 text-gray-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                                    <span className="text-sm">仅电子书（带水印）</span>
+                                </div>
                                 <div className="flex items-center space-x-3 text-gray-400 opacity-50">
                                     <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                                     <span className="text-sm line-through">定制精装传记</span>
