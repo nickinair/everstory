@@ -27,7 +27,7 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
     const [loading, setLoading] = useState(true);
     const [isRedeeming, setIsRedeeming] = useState(false);
     const [couponCode, setCouponCode] = useState('');
-    const [redeemStatus, setRedeemStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
 
     useEffect(() => {
@@ -54,26 +54,35 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
         if (!couponCode.trim()) return;
 
         setIsRedeeming(true);
-        setRedeemStatus(null);
+        setToast(null);
         try {
             const result = await databaseService.redeemCoupon(couponCode);
-            setRedeemStatus({
+            setToast({
                 type: 'success',
                 message: `兑换成功！获得了 ${result.amount} 积分`
             });
             setCouponCode('');
             await fetchData();
             onUpdate();
-            // Auto close after 2 seconds
+
+            // Close modal soon after success
             setTimeout(() => {
                 setIsRedeemModalOpen(false);
-                setRedeemStatus(null);
-            }, 2000);
+            }, 1000);
+
+            // Clear toast after 3 seconds
+            setTimeout(() => {
+                setToast(null);
+            }, 3000);
         } catch (error: any) {
-            setRedeemStatus({
+            setToast({
                 type: 'error',
                 message: error.message || '兑换失败，请检查兑换码'
             });
+            // Clear toast after 3 seconds
+            setTimeout(() => {
+                setToast(null);
+            }, 3000);
         } finally {
             setIsRedeeming(false);
         }
@@ -132,7 +141,7 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
                                 <Ticket className="w-6 h-6" />
                             </div>
                             <div className="text-left">
-                                <h3 className="font-bold text-gray-800">使用兑换券</h3>
+                                <h3 className="font-bold text-gray-800">输入兑换券码</h3>
                                 <p className="text-xs text-gray-400">输入您的礼品码或活动兑换码</p>
                             </div>
                         </div>
@@ -207,18 +216,6 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
                                         />
                                     </div>
 
-                                    {redeemStatus && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className={`p-3 rounded-xl flex items-center space-x-2 text-sm ${redeemStatus.type === 'success' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'
-                                                }`}
-                                        >
-                                            {redeemStatus.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                                            <span>{redeemStatus.message}</span>
-                                        </motion.div>
-                                    )}
-
                                     <div className="flex flex-col space-y-3 pt-2">
                                         <button
                                             disabled={!couponCode.trim() || isRedeeming}
@@ -235,7 +232,7 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
                                         <button
                                             onClick={() => {
                                                 setIsRedeemModalOpen(false);
-                                                setRedeemStatus(null);
+                                                setToast(null);
                                                 setCouponCode('');
                                             }}
                                             className="w-full py-3 text-gray-400 font-medium hover:text-gray-600 transition-colors"
@@ -247,6 +244,30 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
                             </div>
                         </motion.div>
                     </div>
+                )}
+            </AnimatePresence>
+
+            {/* Global Toast Notification */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -50, x: '-50%' }}
+                        animate={{ opacity: 1, y: 20, x: '-50%' }}
+                        exit={{ opacity: 0, scale: 0.95, x: '-50%' }}
+                        className="fixed top-0 left-1/2 z-[200] px-6 py-3 rounded-full shadow-2xl flex items-center space-x-3 min-w-[280px] justify-center border"
+                        style={{
+                            backgroundColor: toast.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                            borderColor: toast.type === 'success' ? '#10B981' : '#EF4444',
+                            color: toast.type === 'success' ? '#065F46' : '#991B1B'
+                        }}
+                    >
+                        {toast.type === 'success' ? (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                        ) : (
+                            <AlertCircle className="w-5 h-5 text-red-500" />
+                        )}
+                        <span className="font-bold text-sm tracking-wide">{toast.message}</span>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>

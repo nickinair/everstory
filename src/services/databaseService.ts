@@ -610,6 +610,7 @@ export const databaseService = {
                 user_id: user?.id,
                 book_title: orderData.bookTitle,
                 book_subtitle: orderData.bookSubtitle,
+                book_author: orderData.bookAuthor,
                 cover_color: orderData.coverColor,
                 image_url: orderData.imageUrl,
                 status: orderData.status || 'processing',
@@ -1047,6 +1048,15 @@ export const databaseService = {
         if (upperCode === 'EVERSTORY500') {
             amount = 500;
             description = '全能500元积分兑换券';
+        } else if (upperCode === 'ES-GIFT-1000-N7B2R9') {
+            amount = 1000;
+            description = '高端定制1000元积分兑换券';
+        } else if (upperCode === 'ES-PLATINUM-2000-W4X7V2') {
+            amount = 2000;
+            description = '至尊尊享2000元积分兑换券';
+        } else if (upperCode === 'COMPENSATION-NICK-399') {
+            amount = 399;
+            description = '订单支付异常补偿积分';
         } else {
             throw new Error('无效的兑换码');
         }
