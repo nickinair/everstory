@@ -93,9 +93,9 @@ export default function App() {
     const inviteProjectId = params.get('inviteProjectId');
 
     if (inviteProjectId) {
+      console.log('App: Found inviteProjectId in URL:', inviteProjectId);
       localStorage.setItem('everstory-pending-invite', inviteProjectId);
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
+      // We no longer clean the URL here to avoid confusing the user in incognito mode
     }
 
     if (promptId && projectId) return { promptId, projectId };
@@ -158,13 +158,32 @@ export default function App() {
       // 2. Fetch Projects
       let userProjects = await databaseService.getProjects();
 
-      // Check for pending invite from URL or persisted state
-      const pendingInviteId = localStorage.getItem('everstory-pending-invite');
-      if (pendingInviteId && !userProjects.some((p: any) => p.id === pendingInviteId)) {
-        console.log('App: Setting pending invite for confirmation UI:', pendingInviteId);
-        setPendingInviteProjectId(pendingInviteId);
-        // Note: we don't remove from localStorage here anymore, 
-        // we remove it after user explicitly joins or cancels to survive refreshes.
+      // Check for pending invite from URL OR localStorage
+      const params = new URLSearchParams(window.location.search);
+      const urlInviteId = params.get('inviteProjectId');
+      const storageInviteId = localStorage.getItem('everstory-pending-invite');
+      const pendingInviteId = urlInviteId || storageInviteId;
+
+      if (pendingInviteId) {
+        console.log('App: Processing pending invite:', pendingInviteId, { fromUrl: !!urlInviteId, fromStorage: !!storageInviteId });
+
+        // Only show modal if user is not already a member
+        const isAlreadyMember = userProjects.some((p: any) => p.id === pendingInviteId);
+        if (!isAlreadyMember) {
+          console.log('App: User not member, showing confirmation UI');
+          setPendingInviteProjectId(pendingInviteId);
+
+          // Clean URL now that we've captured it in state
+          if (window.location.search.includes('inviteProjectId')) {
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        } else {
+          console.log('App: User is already a member, clearing pending invite indicators');
+          localStorage.removeItem('everstory-pending-invite');
+          if (window.location.search.includes('inviteProjectId')) {
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }
       }
 
       setProjects(userProjects as any);
