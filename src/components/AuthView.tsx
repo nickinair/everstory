@@ -287,7 +287,7 @@ export default function AuthView() {
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                            placeholder="example@everstory.ai"
+                                            placeholder="example@everstory.cc"
                                         />
                                     </>
                                 )}

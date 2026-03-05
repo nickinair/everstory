@@ -267,7 +267,7 @@ app.post('/api/auth/register-phone', async (req, res) => {
     // 2. Prepare shadow email and formatted phone
     const cleanPhone = phone.replace(/\D/g, '');
     const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
-    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
+    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.cc`;
 
     // 3. Create user using service role
     const { data: userData, error: createError } = await supabase.auth.admin.createUser({
