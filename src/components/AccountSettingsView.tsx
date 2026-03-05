@@ -121,20 +121,20 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
         iconBgClass="bg-slate-600"
       />
 
-      <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-        <div className="max-w-4xl mx-auto space-y-8 pb-12">
+      <div className="flex-1 overflow-y-auto p-3 lg:p-8">
+        <div className="max-w-4xl mx-auto space-y-4 lg:space-y-8 pb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 lg:p-8"
+            className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4 lg:p-8"
           >
             <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-6 sm:space-y-0 sm:space-x-8 text-center sm:text-left">
               <div className="relative group">
                 <img
                   src={getAvatarUrl(currentUser)}
                   alt="Profile"
-                  className="w-24 h-24 lg:w-32 lg:h-32 rounded-3xl border-4 border-gray-50 object-cover shadow-md transition-transform group-hover:scale-[1.02]"
+                  className="w-20 h-20 lg:w-32 lg:h-32 rounded-3xl border-4 border-gray-50 object-cover shadow-md transition-transform group-hover:scale-[1.02]"
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-xl shadow-lg border border-gray-100 text-gray-400 group-hover:text-primary transition-colors">
@@ -171,7 +171,7 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
                     </div>
                   ) : (
                     <>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-gray-800">{currentUser?.full_name || '用户'}</h2>
+                      <h2 className="text-xl lg:text-3xl font-bold text-gray-800">{currentUser?.full_name || '用户'}</h2>
                       <button
                         onClick={() => setIsEditingName(true)}
                         className="p-2 text-gray-400 hover:text-primary transition cursor-pointer"
@@ -203,7 +203,7 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + (sIdx * 0.1) }}
             >
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-4 px-6">
+              <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3 px-6">
                 {section.title}
               </h2>
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -220,11 +220,11 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
                     className={`w-full flex items-center p-6 hover:bg-gray-50/80 transition-all text-left cursor-pointer group ${iIdx !== section.items.length - 1 ? 'border-b border-gray-50' : ''
                       }`}
                   >
-                    <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-primary/5 group-hover:text-primary transition-colors mr-4">
-                      <item.icon className="w-6 h-6" />
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-primary/5 group-hover:text-primary transition-colors mr-3 lg:mr-4">
+                      <item.icon className="w-5 h-5 lg:w-6 lg:h-6" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-base font-bold text-gray-800 transition-colors group-hover:text-gray-900">{item.label}</p>
+                      <p className="text-sm lg:text-base font-bold text-gray-800 transition-colors group-hover:text-gray-900">{item.label}</p>
                       {'description' in item ? (
                         <p className="text-xs text-gray-500 mt-1 leading-relaxed">{item.description}</p>
                       ) : (
@@ -240,7 +240,7 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
                         {currentUser?.is_premium ? '尊享版' : '免费版'}
                       </div>
                     )}
-                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 text-gray-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
                   </button>
                 ))}
               </div>
@@ -255,18 +255,18 @@ export default function AccountSettingsView({ currentUser, onNavigate, onBack }:
           >
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-between p-6 bg-rose-50 hover:bg-rose-100 transition-colors rounded-3xl text-rose-600 font-bold group cursor-pointer shadow-sm hover:shadow-md"
+              className="w-full flex items-center justify-between p-4 lg:p-6 bg-rose-50 hover:bg-rose-100 transition-colors rounded-3xl text-rose-600 font-bold group cursor-pointer shadow-sm hover:shadow-md"
             >
               <div className="flex items-center">
-                <div className="w-12 h-12 bg-white/50 rounded-2xl flex items-center justify-center mr-4 shadow-sm">
-                  <LogOut className="w-6 h-6" />
+                <div className="w-10 h-10 lg:w-12 lg:h-12 bg-white/50 rounded-2xl flex items-center justify-center mr-3 lg:mr-4 shadow-sm">
+                  <LogOut className="w-5 h-5 lg:w-6 lg:h-6" />
                 </div>
                 <div>
-                  <p className="text-base">退出当前账户</p>
-                  <p className="text-[10px] text-rose-400 mt-0.5 opacity-80 uppercase tracking-wider font-medium">Sign Out from Session</p>
+                  <p className="text-sm lg:text-base">退出当前账户</p>
+                  <p className="text-[9px] lg:text-[10px] text-rose-400 mt-0.5 opacity-80 uppercase tracking-wider font-medium">Sign Out from Session</p>
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+              <ChevronRight className="w-4 h-4 lg:w-5 lg:h-5 opacity-40 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
             </button>
           </motion.div>
         </div>
