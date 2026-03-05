@@ -26,7 +26,7 @@
     "nodemailer": "^8.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tencentcloud-sdk-nodejs-sms": "^3.0.1226",
+    "tencentcloud-sdk-nodejs-sms": "^4.1.171",
     "vite": "^6.2.0"
   },
   "devDependencies": {
