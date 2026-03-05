@@ -139,9 +139,15 @@ export default function MembershipManagementView({
                             className="relative"
                         >
                             <svg width="48" height="32" viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M4 28C12 28 20 24 32 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 5" className="opacity-40" />
+                                <defs>
+                                    <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stopColor="currentColor" stopOpacity="0.1" />
+                                        <stop offset="100%" stopColor="currentColor" stopOpacity="0.8" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M4 28C12 28 20 24 32 8" stroke="url(#arrowGradient)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4 6" />
                                 <path d="M26 8H34V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <circle cx="34" cy="8" r="1.5" fill="currentColor" />
+                                <circle cx="34" cy="8" r="2" fill="currentColor" />
                             </svg>
                         </motion.div>
                         <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600/50 bg-white/40 px-2 py-0.5 rounded-lg backdrop-blur-[2px] border border-amber-50/50">Upgrade</span>

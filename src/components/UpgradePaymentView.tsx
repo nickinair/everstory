@@ -33,16 +33,18 @@ export default function UpgradePaymentView({
     const [step, setStep] = useState<'checkout' | 'complete'>('checkout');
     const [usePoints, setUsePoints] = useState(false);
 
-    const originalPrice = 599;
+    const packagePrice = 599;
+    const actualPrice = 399;
     const availablePoints = currentUser?.points || 0;
-    const pointsDeduction = usePoints ? Math.min(availablePoints, originalPrice) : 0;
-    const totalPrice = originalPrice - pointsDeduction;
+    const pointsDeduction = usePoints ? Math.min(availablePoints, actualPrice) : 0;
+    const totalPrice = actualPrice - pointsDeduction;
 
     const benefits = [
-        { icon: Zap, text: '无限AI故事创作与润色' },
-        { icon: BookOpen, text: '包含1本价值¥599的精装传记' },
-        { icon: ShieldCheck, text: '永久云端加密存储' },
-        { icon: Star, text: '至尊尊享会员标识' }
+        { icon: Zap, text: '无限次数故事录制' },
+        { icon: BookOpen, text: '定制精装传记' },
+        { icon: Sparkles, text: '专业级 AI 深度写作' },
+        { icon: ShieldCheck, text: '永久云端音视频存储' },
+        { icon: ShieldCheck, text: '30天无忧退款保证' }
     ];
 
     const handlePayment = async () => {
@@ -123,9 +125,13 @@ export default function UpgradePaymentView({
                 {/* Left: Benefits & Package */}
                 <div className="space-y-6">
                     <div className="bg-gradient-to-br from-amber-400 to-amber-600 rounded-3xl p-8 text-white shadow-lg shadow-amber-200">
-                        <h2 className="text-2xl font-bold mb-2">精装传记尊享版</h2>
+                        <h2 className="text-2xl font-bold mb-2">尊享版</h2>
                         <p className="text-white/80 text-sm mb-6">一次性开启所有专业功能与定制服务</p>
-                        <div className="text-4xl font-bold mb-8">¥599<span className="text-sm font-normal opacity-70 ml-2">一次性付费</span></div>
+                        <div className="text-4xl font-bold mb-8 flex items-baseline">
+                            <span className="text-lg opacity-80 mr-1">价值</span>
+                            ¥599
+                            <span className="text-sm font-normal opacity-70 ml-2">一次性付费</span>
+                        </div>
 
                         <div className="space-y-4">
                             {benefits.map((b, i) => (
@@ -156,9 +162,13 @@ export default function UpgradePaymentView({
                     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
                         <h3 className="font-bold text-gray-800 mb-4">支付详情</h3>
                         <div className="space-y-4">
-                            <div className="flex justify-between text-gray-600">
-                                <span>套餐总计</span>
-                                <span>¥{originalPrice.toFixed(2)}</span>
+                            <div className="flex justify-between text-gray-500 line-through text-sm">
+                                <span>原价</span>
+                                <span>¥{packagePrice.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-gray-900 font-medium">
+                                <span>活动价</span>
+                                <span>¥{actualPrice.toFixed(2)}</span>
                             </div>
 
                             <div className="pt-4 border-t border-dashed border-gray-100">

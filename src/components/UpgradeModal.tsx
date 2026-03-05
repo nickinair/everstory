@@ -17,10 +17,10 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: Upgra
                     '免费版目前仅支持创建 2 个项目。立即升级即可开启更多家人的传记项目，记录完整家族记忆。';
 
     const benefits = [
-        '无限次专业提示引导',
-        '精装全彩纪念册邮寄到家',
+        '无限次数故事录制',
+        '定制全彩精装传记',
+        '专业级AI深度写作',
         '永久云端音视频存储',
-        '全家协作共同创作',
         '30天无忧退款保证'
     ];
 
