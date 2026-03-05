@@ -953,7 +953,7 @@ export const databaseService = {
     },
 
     async syncProfile(userId: string, data: { full_name?: string; avatar_url?: string; phone?: string; email?: string }) {
-        console.log(`DatabaseService: Syncing profile for ${userId}`);
+        console.log(`DatabaseService: Syncing profile for ${userId}`, data);
         const { error } = await supabase
             .from('profiles')
             .upsert({

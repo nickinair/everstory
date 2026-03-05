@@ -26,9 +26,10 @@ export default function AuthView() {
     const isInviteLink = Boolean(params.get('inviteProjectId'));
 
     const getFormattedPhone = (p: string) => {
-        const cleanPhone = p.replace(/\D/g, '');
-        if (cleanPhone.startsWith('86')) return `+${cleanPhone}`;
-        return `+86${cleanPhone}`;
+        const clean = p.replace(/\D/g, '');
+        if (clean.length === 11) return `+86${clean}`;
+        if (clean.startsWith('86') && clean.length === 13) return `+${clean}`;
+        return p;
     };
 
     const handleSendOTP = async () => {

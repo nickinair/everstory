@@ -264,17 +264,19 @@ app.post('/api/auth/register-phone', async (req, res) => {
       return res.status(400).json({ error: '验证码无效或已过期' });
     }
 
-    // 2. Prepare shadow email
-    const shadowEmail = `user_${phone.replace(/\D/g, '')}@users.everstory.ai`;
+    // 2. Prepare shadow email and formatted phone
+    const cleanPhone = phone.replace(/\D/g, '');
+    const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
+    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
 
     // 3. Create user using service role
     const { data: userData, error: createError } = await supabase.auth.admin.createUser({
       email: shadowEmail,
       password: password,
-      email_confirm: true, // Auto-confirm since we verified phone
+      email_confirm: true,
       user_metadata: {
         full_name: fullName,
-        phone: `+86${phone.replace(/\D/g, '')}`
+        phone: formattedPhone
       }
     });
 
@@ -288,15 +290,19 @@ app.post('/api/auth/register-phone', async (req, res) => {
     // 4. Mark OTP as used
     await supabase.from('sms_otps').update({ used: true }).eq('id', otpData.id);
 
-    // 5. Initialize Profile (Optional, as the frontend might do this, but safer here)
+    // 5. Initialize Profile
     const userId = userData.user.id;
-    await supabase.from('profiles').upsert({
+    const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
       full_name: fullName,
-      phone: `+86${phone.replace(/\D/g, '')}`,
-      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(phone)}`,
+      phone: formattedPhone,
+      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanPhone)}`,
       updated_at: new Date().toISOString()
     });
+
+    if (profileError) {
+      console.warn('Profile initialization warning:', profileError);
+    }
 
     res.json({ success: true, message: '注册成功' });
   } catch (error) {
