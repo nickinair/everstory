@@ -150,7 +150,7 @@ app.post('/api/sms/send-otp', async (req, res) => {
       SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
       SignName: process.env.TENCENT_SMS_SIGN_NAME,
       TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID,
-      TemplateParamSet: [otp, "10"], // {1} is code, {2} is expiry time in minutes
+      TemplateParamSet: [otp], // Only {1} is present in template 2605713
       PhoneNumberSet: [`+86${phone.replace(/\D/g, '')}`],
     };
 
