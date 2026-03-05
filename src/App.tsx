@@ -659,7 +659,7 @@ export default function App() {
                         if (currentProjectId) fetchProjectData(currentProjectId);
                       }}
                       onPromptClick={(prompt) => {
-                        if (!hasOrder && stories.length >= 2) {
+                        if (!hasOrder && stories.length >= 10) {
                           setUpgradeModalType('story-limit');
                           setIsUpgradeModalOpen(true);
                           return;

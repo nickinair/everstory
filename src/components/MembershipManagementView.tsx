@@ -106,7 +106,7 @@ export default function MembershipManagementView({
                             <div className="space-y-4 pt-4 border-t border-gray-50">
                                 <div className="flex items-center space-x-3 text-gray-600">
                                     <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                                    <span className="text-sm">2 个故事录制上限</span>
+                                    <span className="text-sm">10 个故事录制上限</span>
                                 </div>
                                 <div className="flex items-center space-x-3 text-gray-600">
                                     <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />

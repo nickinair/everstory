@@ -47,7 +47,7 @@ export default function PromptsView({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleAddAIPrompt = async (question: string) => {
-    if (!hasOrder && prompts.length >= 2) {
+    if (!hasOrder && prompts.length >= 10) {
       onShowUpgrade();
       return;
     }
@@ -63,7 +63,7 @@ export default function PromptsView({
     const file = e.target.files?.[0];
     if (!file || !projectId) return;
 
-    if (!hasOrder && prompts.length >= 2) {
+    if (!hasOrder && prompts.length >= 10) {
       onShowUpgrade();
       return;
     }
@@ -174,7 +174,7 @@ export default function PromptsView({
   const handleToggleQuestion = (id: string) => {
     setSelectedQuestionIds(prev => {
       const isSelecting = !prev.includes(id);
-      if (!hasOrder && isSelecting && (prompts.length + prev.length) >= 2) {
+      if (!hasOrder && isSelecting && (prompts.length + prev.length) >= 10) {
         onShowUpgrade();
         return prev;
       }
@@ -216,7 +216,7 @@ export default function PromptsView({
 
       const selectedQuestions = Array.from(questionMap.values());
 
-      if (!hasOrder && (prompts.length + selectedQuestions.length) > 2) {
+      if (!hasOrder && (prompts.length + selectedQuestions.length) > 10) {
         onShowUpgrade();
         setIsSubmitting(false);
         return;
@@ -311,7 +311,7 @@ export default function PromptsView({
           </button>
           <button
             onClick={() => {
-              if (!hasOrder && prompts.length >= 2) {
+              if (!hasOrder && prompts.length >= 10) {
                 onShowUpgrade();
               } else {
                 setIsMagicWandOpen(true);
@@ -335,7 +335,7 @@ export default function PromptsView({
           </button>
           <button
             onClick={() => {
-              if (!hasOrder && prompts.length >= 2) {
+              if (!hasOrder && prompts.length >= 10) {
                 onShowUpgrade();
               } else {
                 setIsAddModalOpen(true);

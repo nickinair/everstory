@@ -156,7 +156,7 @@ export default function StoriesView({
         {/* Placeholder for more stories */}
         <div
           onClick={() => {
-            if (!hasOrder && stories.length >= 2) {
+            if (!hasOrder && stories.length >= 10) {
               onShowUpgrade();
             } else {
               onAddStory();
