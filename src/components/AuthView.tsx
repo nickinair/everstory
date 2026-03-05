@@ -48,11 +48,14 @@ export default function AuthView() {
                 });
                 if (otpError) throw otpError;
             } else {
-                // Mock phone OTP
-                console.log('Sending mock OTP to:', phone);
-                if (phone === '13888888888') {
-                    // Specific mock behavior if needed
-                }
+                // Real phone SMS OTP
+                const response = await fetch('/api/sms/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || '发送验证码失败');
             }
 
             setCountdown(60);
@@ -80,49 +83,51 @@ export default function AuthView() {
         try {
             const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
 
-            // 1. Verify OTP first
-            if (otpCode !== '777777') {
+            if (method === 'phone') {
+                // 1. Backend Registration (includes OTP verification and profile creation)
+                const response = await fetch('/api/auth/register-phone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, password, fullName, code: otpCode })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || '注册失败');
+
+                // 2. Sign in immediately
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: targetEmail,
+                    password
+                });
+                if (signInError) throw signInError;
+            } else {
+                // Email Verification Flow
                 const { error: verifyError } = await supabase.auth.verifyOtp({
                     email: targetEmail,
                     token: otpCode,
                     type: 'signup'
                 });
-                if (verifyError) {
-                    const { error: magicError } = await supabase.auth.verifyOtp({
-                        email: targetEmail,
-                        token: otpCode,
-                        type: 'magiclink'
-                    });
-                    if (magicError) throw verifyError;
-                }
+                if (verifyError) throw verifyError;
+
+                // Set metadata and password
+                const { error: updateError } = await supabase.auth.updateUser({
+                    password: password,
+                    data: { full_name: fullName || email }
+                });
+                if (updateError) throw updateError;
             }
 
-            // 2. Set metadata and password
-            const { data, error: updateError } = await supabase.auth.updateUser({
-                password: password,
-                data: { full_name: fullName || (method === 'phone' ? phone : email) }
-            });
-            if (updateError) throw updateError;
-
-            if (data.user) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
                 const identifier = method === 'phone' ? getFormattedPhone(phone) : email;
                 const displayName = fullName || identifier;
-                const defaultAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(identifier)}`;
 
-                // Sync Profile Data
-                await databaseService.syncProfile(data.user.id, {
-                    full_name: displayName,
-                    avatar_url: defaultAvatar,
-                    phone: method === 'phone' ? identifier : undefined,
-                    email: method === 'email' ? identifier : undefined
-                });
-
-                await databaseService.ensureDefaultProject(data.user.id, displayName);
+                // Final initialization tasks
+                await databaseService.ensureDefaultProject(user.id, displayName);
                 if (isInviteLink) {
                     const inviteId = params.get('inviteProjectId');
-                    if (inviteId) await databaseService.joinProject(inviteId, data.user.id);
+                    if (inviteId) await databaseService.joinProject(inviteId, user.id);
                 }
-                await databaseService.checkAndProcessInvitations(data.user.id, identifier);
+                await databaseService.checkAndProcessInvitations(user.id, identifier);
                 window.location.reload();
             }
         } catch (err: any) {
@@ -166,7 +171,6 @@ export default function AuthView() {
         setLoading(true);
         setError(null);
         try {
-            const identifier = method === 'phone' ? getFormattedPhone(phone) : email;
             const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
 
             const { data, error: loginError } = await supabase.auth.signInWithPassword({

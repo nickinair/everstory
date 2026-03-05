@@ -5,6 +5,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from "@google/genai";
+import tencentcloud from 'tencentcloud-sdk-nodejs-sms';
+import { createClient } from '@supabase/supabase-js';
+
+const SmsClient = tencentcloud.sms.v20210111.Client;
 
 // Load environment variables from .env or .env.local
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +35,26 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.SMTP_USER || 'admin@everstory.cn',
     pass: process.env.SMTP_PASSWORD, // Must be provided in .env
+  },
+});
+
+// Initialize Supabase Admin Client
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+);
+
+// Initialize Tencent Cloud SMS Client
+const smsClient = new SmsClient({
+  credential: {
+    secretId: process.env.TENCENT_SECRET_ID,
+    secretKey: process.env.TENCENT_SECRET_KEY,
+  },
+  region: "ap-guangzhou", // Default to Guangzhou
+  profile: {
+    httpProfile: {
+      endpoint: "sms.tencentcloudapi.com",
+    },
   },
 });
 
@@ -96,7 +120,191 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
-// Gemini AI Proxy
+// --- SMS Endpoints ---
+
+// Send OTP via Tencent Cloud SMS
+app.post('/api/sms/send-otp', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) {
+    return res.status(400).json({ error: '手机号不能为空' });
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+  try {
+    // 1. Store OTP in database
+    const { error: dbError } = await supabase
+      .from('sms_otps')
+      .insert({
+        phone,
+        code: otp,
+        expires_at: expiresAt.toISOString()
+      });
+
+    if (dbError) throw dbError;
+
+    // 2. Send SMS via Tencent Cloud
+    const params = {
+      SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
+      SignName: process.env.TENCENT_SMS_SIGN_NAME,
+      TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID,
+      TemplateParamSet: [otp, "10"], // {1} is code, {2} is expiry time in minutes
+      PhoneNumberSet: [`+86${phone.replace(/\D/g, '')}`],
+    };
+
+    smsClient.SendSms(params).then(
+      (data) => {
+        console.log('SMS Sent Successfully:', data);
+        if (data.SendStatusSet[0].Code === 'Ok') {
+          res.json({ success: true, message: '验证码已发送' });
+        } else {
+          res.status(500).json({ error: `发送失败: ${data.SendStatusSet[0].Message}` });
+        }
+      },
+      (err) => {
+        console.error('SMS Send Error:', err);
+        res.status(500).json({ error: '短信服务调用失败' });
+      }
+    );
+
+  } catch (error) {
+    console.error('OTP Process Error:', error);
+    res.status(500).json({ error: '系统错误，请稍后重试' });
+  }
+});
+
+// Verify OTP
+app.post('/api/sms/verify-otp', async (req, res) => {
+  const { phone, code } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('sms_otps')
+      .select('*')
+      .eq('phone', phone)
+      .eq('code', code)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      return res.status(400).json({ error: '验证码无效或已过期' });
+    }
+
+    // Mark as used
+    await supabase
+      .from('sms_otps')
+      .update({ used: true })
+      .eq('id', data.id);
+
+    res.json({ success: true, message: '验证成功' });
+  } catch (error) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// Send Project Invitation via SMS
+app.post('/api/sms/send-invite', async (req, res) => {
+  const { phone, inviterName, projectName, projectId } = req.body;
+  if (!phone || !projectId) {
+    return res.status(400).json({ error: '缺少必要参数' });
+  }
+
+  const inviteLink = `https://everstory.cc?inviteProjectId=${projectId}`;
+
+  try {
+    const params = {
+      SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
+      SignName: process.env.TENCENT_SMS_SIGN_NAME,
+      TemplateId: process.env.TENCENT_SMS_INVITE_TEMPLATE_ID || process.env.TENCENT_SMS_TEMPLATE_ID, // Use dedicated template if available
+      TemplateParamSet: [inviterName || '您的好友', projectName || '新项目', inviteLink], // {1} inviter, {2} project, {3} link
+      PhoneNumberSet: [`+86${phone.replace(/\D/g, '')}`],
+    };
+
+    smsClient.SendSms(params).then(
+      (data) => {
+        if (data.SendStatusSet[0].Code === 'Ok') {
+          res.json({ success: true });
+        } else {
+          res.status(500).json({ error: data.SendStatusSet[0].Message });
+        }
+      },
+      (err) => {
+        res.status(500).json({ error: '发送失败' });
+      }
+    );
+  } catch (error) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// Register user via Phone (using SMS verification)
+app.post('/api/auth/register-phone', async (req, res) => {
+  const { phone, password, fullName, code } = req.body;
+  if (!phone || !password || !code) {
+    return res.status(400).json({ error: '字段缺失' });
+  }
+
+  try {
+    // 1. Verify OTP first
+    const { data: otpData, error: otpError } = await supabase
+      .from('sms_otps')
+      .select('*')
+      .eq('phone', phone)
+      .eq('code', code)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (otpError || !otpData) {
+      return res.status(400).json({ error: '验证码无效或已过期' });
+    }
+
+    // 2. Prepare shadow email
+    const shadowEmail = `user_${phone.replace(/\D/g, '')}@users.everstory.ai`;
+
+    // 3. Create user using service role
+    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+      email: shadowEmail,
+      password: password,
+      email_confirm: true, // Auto-confirm since we verified phone
+      user_metadata: {
+        full_name: fullName,
+        phone: `+86${phone.replace(/\D/g, '')}`
+      }
+    });
+
+    if (createError) {
+      if (createError.message.includes('already registered')) {
+        return res.status(400).json({ error: '该手机号已注册，请直接登录' });
+      }
+      throw createError;
+    }
+
+    // 4. Mark OTP as used
+    await supabase.from('sms_otps').update({ used: true }).eq('id', otpData.id);
+
+    // 5. Initialize Profile (Optional, as the frontend might do this, but safer here)
+    const userId = userData.user.id;
+    await supabase.from('profiles').upsert({
+      id: userId,
+      full_name: fullName,
+      phone: `+86${phone.replace(/\D/g, '')}`,
+      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(phone)}`,
+      updated_at: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: '注册成功' });
+  } catch (error) {
+    console.error('Registration Error:', error);
+    res.status(500).json({ error: '注册失败: ' + (error.message || '服务器错误') });
+  }
+});
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL; // Optional: for users in restricted regions
 let genAI = null;

@@ -40,13 +40,36 @@ export default function InviteModal({ isOpen, onClose, projectId, members, onMem
         e.preventDefault();
         if (!invitePhone) return;
         try {
+            // Get current user and project info for the invitation
+            const { data: { user } } = await databaseService.getSession() as any;
+            const projects = await databaseService.getProjects();
+            const currentProject = projects.find((p: any) => p.id === projectId);
+
+            const response = await fetch('/api/sms/send-invite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: invitePhone,
+                    inviterName: user?.user_metadata?.full_name || '您的好友',
+                    projectName: currentProject?.name || '新项目',
+                    projectId: projectId
+                })
+            });
+
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.error || '发送失败');
+            }
+
+            // Also record the invitation in the database
             await databaseService.sendInvitation(projectId, invitePhone);
+
             alert(`已通过短信向手机号 ${invitePhone} 发送项目邀请`);
             setInvitePhone('');
             loadInvitations();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error sending invitation:', error);
-            alert('发送邀请失败，请稍后重试');
+            alert('发送邀请失败: ' + (error.message || '请稍后重试'));
         }
     };
 

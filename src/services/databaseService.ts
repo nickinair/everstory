@@ -775,8 +775,8 @@ export const databaseService = {
             }
 
             for (const idObj of identifiers) {
-                const { data: realInvites } = await supabase
-                    .from('project_invitations')
+                const { data: realInvites } = await (supabase
+                    .from('project_invitations') as any)
                     .select('project_id')
                     .eq(idObj.field, idObj.value);
 
@@ -786,7 +786,7 @@ export const databaseService = {
                         await this.joinProject(inv.project_id, userId);
                     }
                     // Delete processed invitations
-                    await supabase.from('project_invitations').delete().eq(idObj.field, idObj.value);
+                    await (supabase.from('project_invitations') as any).delete().eq(idObj.field, idObj.value);
                 }
             }
         } catch (e) {
@@ -803,7 +803,7 @@ export const databaseService = {
         }
 
         try {
-            const { data } = await supabase.from('project_invitations')
+            const { data } = await (supabase.from('project_invitations') as any)
                 .select('phone, email')
                 .eq('project_id', projectId);
             return data || [];
