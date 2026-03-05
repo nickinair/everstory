@@ -470,7 +470,7 @@ export default function App() {
                 </div>
                 <div className="text-[10px] text-gray-400 flex items-center mt-0.5">
                   <Users className="w-3 h-3 mr-1" />
-                  <span>{(projects.find(p => p.id === currentProjectId)?.members.length || 0) + 1} 位成员</span>
+                  <span>{projects.find(p => p.id === currentProjectId)?.members.length || 0} 位成员</span>
                 </div>
               </div>
             </div>
@@ -554,7 +554,7 @@ export default function App() {
             {(() => {
               const currentProject = projects.find(p => p.id === currentProjectId);
               const members = currentProject?.members || [];
-              const membersCount = (currentProject?.members || []).length + 1;
+              const membersCount = (currentProject?.members || []).length;
 
               return (
                 <>

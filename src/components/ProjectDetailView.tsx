@@ -184,7 +184,7 @@ export default function ProjectDetailView({ project, currentUser, onBack, onUpda
               <div className="flex items-center space-x-4">
                 <div className="flex items-center text-sm text-gray-500">
                   <Users className="w-4 h-4 mr-2" />
-                  {members.length + 1} 位成员
+                  {members.length} 位成员
                 </div>
                 <div className="flex items-center text-sm text-gray-500">
                   <Shield className="w-4 h-4 mr-2" />
