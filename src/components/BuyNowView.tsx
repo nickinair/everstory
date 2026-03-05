@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, Edit2, RefreshCw, AlertCircle, Printer, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Edit2, RefreshCw, AlertCircle, Printer, MoreVertical, Ticket, Wallet } from 'lucide-react';
 import { Story } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { databaseService } from '../services/databaseService';
@@ -28,11 +28,21 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
     const [isEditingShipping, setIsEditingShipping] = useState(false);
     const [tempShipping, setTempShipping] = useState({ name: '', phone: '', address: '' });
 
+    const [usePoints, setUsePoints] = useState(false);
+    const [userPoints, setUserPoints] = useState(0);
+
     const basePrice = 399;
     const ebookPrice = includeEbook ? 59 : 0;
     const hardcoverUnitPrice = 79;
     const extraHardcoverPrice = includeExtraHardcover ? hardcoverQuantity * hardcoverUnitPrice : 0;
-    const totalPrice = basePrice + ebookPrice + extraHardcoverPrice;
+    const subtotal = basePrice + ebookPrice + extraHardcoverPrice;
+
+    const pointsDeduction = usePoints ? Math.min(userPoints, subtotal) : 0;
+    const totalPrice = subtotal - pointsDeduction;
+
+    useState(() => {
+        databaseService.getPoints().then(setUserPoints);
+    });
 
     const steps = [
         { id: 'addons', label: '1. 订单详情' },
@@ -200,6 +210,37 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                         </select>
                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Points Deduction Card */}
+                            <div
+                                className={`p-4 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-4 lg:gap-6 items-center ${usePoints ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'} ${userPoints <= 0 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+                                onClick={() => userPoints > 0 && setUsePoints(!usePoints)}
+                            >
+                                <div className="flex items-center w-full sm:w-auto">
+                                    <input
+                                        type="checkbox"
+                                        checked={usePoints}
+                                        disabled={userPoints <= 0}
+                                        readOnly
+                                        className="h-5 w-5 text-accent border-gray-300 rounded focus:ring-accent cursor-pointer"
+                                    />
+                                    <span className="sm:hidden ml-3 font-bold text-gray-800">使用积分抵扣</span>
+                                </div>
+                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-accent/10 rounded-xl flex items-center justify-center text-accent shrink-0 transition-transform">
+                                    <Wallet className="w-6 h-6 lg:w-8 lg:h-8" />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <h3 className="text-lg lg:text-xl font-bold text-gray-800">使用积分抵扣</h3>
+                                        <div className="text-right">
+                                            <span className="text-sm font-medium text-gray-500">可用：{userPoints} 积分</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs lg:text-sm text-gray-500 leading-relaxed">
+                                        1 积分可抵扣 1 元。您当前最高可抵扣 <span className="text-accent font-bold">¥{Math.min(userPoints, subtotal).toFixed(2)}</span>
+                                    </p>
                                 </div>
                             </div>
 
@@ -394,8 +435,18 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                     </button>
                                     <button
                                         onClick={async () => {
+                                            if (isProcessing) return;
                                             setIsProcessing(true);
                                             try {
+                                                // 1. Spend points if requested
+                                                if (usePoints && pointsDeduction > 0) {
+                                                    await databaseService.spendPoints(
+                                                        Math.round(pointsDeduction),
+                                                        `支付订单: ${bookTitle}`
+                                                    );
+                                                }
+
+                                                // 2. Create order
                                                 await databaseService.createOrder(projectId, {
                                                     bookTitle,
                                                     bookSubtitle,
@@ -406,7 +457,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                                     status: 'processing',
                                                     recipientName,
                                                     contactPhone,
-                                                    shippingAddress
+                                                    shippingAddress: shippingAddress
                                                 });
                                                 setStep('complete');
                                             } catch (error) {
@@ -420,7 +471,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                         className="flex-2 py-4 bg-accent hover:bg-teal-700 text-white rounded-xl font-bold shadow-lg shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
                                     >
                                         {isProcessing && <RefreshCw className="w-5 h-5 animate-spin" />}
-                                        <span>{isProcessing ? '处理中...' : '继续支付'}</span>
+                                        <span>{isProcessing ? '处理中...' : (totalPrice <= 0 ? '确认支付' : '继续支付')}</span>
                                     </button>
                                 </div>
 
@@ -437,6 +488,15 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                             if (isProcessing) return;
                                             setIsProcessing(true);
                                             try {
+                                                // 1. Spend points if requested
+                                                if (usePoints && pointsDeduction > 0) {
+                                                    await databaseService.spendPoints(
+                                                        Math.round(pointsDeduction),
+                                                        `支付订单: ${bookTitle}`
+                                                    );
+                                                }
+
+                                                // 2. Create order
                                                 await databaseService.createOrder(projectId, {
                                                     bookTitle,
                                                     bookSubtitle,
@@ -461,7 +521,7 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                         className="flex-[2] py-4 bg-accent text-white rounded-xl font-bold shadow-lg shadow-accent/20 active:scale-95 disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
                                     >
                                         {isProcessing && <RefreshCw className="w-5 h-5 animate-spin" />}
-                                        <span>{isProcessing ? '处理中...' : '继续支付'}</span>
+                                        <span>{isProcessing ? '处理中...' : (totalPrice <= 0 ? '确认支付' : '继续支付')}</span>
                                     </button>
                                 </div>
                             </div>
@@ -488,8 +548,17 @@ export default function BuyNowView({ projectId, stories, onComplete, onBack }: {
                                                 <span className="text-gray-900 font-medium">¥{(hardcoverQuantity * hardcoverUnitPrice).toFixed(2)}</span>
                                             </div>
                                         )}
+                                        {usePoints && pointsDeduction > 0 && (
+                                            <div className="flex justify-between text-sm text-accent font-medium">
+                                                <span className="flex items-center">
+                                                    <Ticket className="w-3.5 h-3.5 mr-1" />
+                                                    积分抵扣
+                                                </span>
+                                                <span>- ¥{pointsDeduction.toFixed(2)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between text-sm pt-4 border-t border-gray-100">
-                                            <span className="text-gray-900 font-bold">总计</span>
+                                            <span className="text-gray-900 font-bold">应付金额</span>
                                             <span className="text-2xl font-bold text-accent">¥{totalPrice.toFixed(2)}</span>
                                         </div>
                                     </div>

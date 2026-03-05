@@ -23,7 +23,9 @@ import {
   LogOut,
   ChevronRight,
   Folder,
-  UserPlus
+  UserPlus,
+  Ticket,
+  Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAvatarUrl } from './lib/avatar';
@@ -50,6 +52,7 @@ import TencentDesk, { openTencentChat } from './components/TencentDesk';
 import BuyNowView from './components/BuyNowView';
 import UpgradeModal from './components/UpgradeModal';
 import JoinConfirmationModal from './components/JoinConfirmationModal';
+import RedemptionView from './components/RedemptionView';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -522,6 +525,18 @@ export default function App() {
             <Gift className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100" />
             <span>赠送 Everstory</span>
           </button>
+          <button
+            onClick={() => setCurrentView('redemption')}
+            className={`w-full flex items-center text-sm text-gray-300 hover:text-white group text-left cursor-pointer p-1 rounded-lg transition-colors ${currentView === 'redemption' ? 'bg-white/10 text-white' : ''}`}
+          >
+            <Ticket className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span>兑换券</span>
+                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+              </div>
+            </div>
+          </button>
         </div>
 
         <div className="p-4 border-t border-white/10">
@@ -536,6 +551,12 @@ export default function App() {
               referrerPolicy="no-referrer"
             />
             <span className="text-sm">账户设置</span>
+            {currentUser?.is_premium && (
+              <div className="flex items-center bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded text-[10px] font-bold">
+                <Star className="w-2.5 h-2.5 mr-1 fill-amber-400" />
+                高级
+              </div>
+            )}
           </button>
         </div>
       </aside>
@@ -585,6 +606,7 @@ export default function App() {
                         setSelectedPrompt(prompt);
                         setCurrentView('recording');
                       }}
+                      orders={orders}
                     />
                   )}
                   {currentView === 'stories' && (
@@ -773,6 +795,14 @@ export default function App() {
                   } else {
                     setCurrentView('stories');
                   }
+                }}
+              />
+            )}
+            {currentView === 'redemption' && (
+              <RedemptionView
+                onBack={() => setCurrentView('home')}
+                onUpdate={() => {
+                  if (session?.user?.id) fetchUserData(session.user.id, false);
                 }}
               />
             )}

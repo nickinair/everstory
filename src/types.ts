@@ -8,6 +8,17 @@ export interface User {
   phone?: string;
   full_name?: string;
   avatar_url?: string;
+  points?: number;
+  is_premium?: boolean;
+}
+
+export interface PointTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'earn' | 'spend';
+  description: string;
+  createdAt: string;
 }
 
 export interface Story {
@@ -76,4 +87,4 @@ export interface Project {
   createdAt: string;
 }
 
-export type ViewType = 'home' | 'stories' | 'prompts' | 'order' | 'settings' | 'account' | 'story-detail' | 'order-detail' | 'add-story' | 'project-detail' | 'recording' | 'buy-now';
+export type ViewType = 'home' | 'stories' | 'prompts' | 'order' | 'settings' | 'account' | 'story-detail' | 'order-detail' | 'add-story' | 'project-detail' | 'recording' | 'buy-now' | 'redemption';

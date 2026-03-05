@@ -15,6 +15,7 @@ interface HomeViewProps {
   onInvite: () => void;
   onStoryClick: (id: string) => void;
   onPromptClick: (prompt: Prompt) => void;
+  orders: any[];
 }
 
 export default function HomeView({
@@ -27,7 +28,8 @@ export default function HomeView({
   hasOrder,
   onInvite,
   onStoryClick,
-  onPromptClick
+  onPromptClick,
+  orders
 }: HomeViewProps) {
   const categoryThemes: Record<string, { Icon: React.ElementType; color: string; iconColor: string }> = {
     '童年与成长': { Icon: Baby, color: 'bg-orange-50', iconColor: 'text-orange-300' },
@@ -43,15 +45,20 @@ export default function HomeView({
   };
   const getTheme = (cat?: string) => categoryThemes[cat || ''] || { Icon: MessageCircle, color: 'bg-gray-50', iconColor: 'text-gray-400' };
 
+  const premiumStatus = currentUser?.is_premium;
+  const purchasedBooksCount = orders.length;
+
   const flowSteps = [
     {
       id: 'upgrade',
-      title: '立即订购',
-      desc: '为至亲写下一生传记',
-      icon: Heart,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-      action: () => onNavigate('buy-now')
+      title: premiumStatus ? '高级会员' : '立即订购',
+      desc: premiumStatus
+        ? `尊敬的高级会员，您已购 ${purchasedBooksCount} 本精装传记`
+        : '为至亲写下一生传记',
+      icon: premiumStatus ? Star : Heart,
+      color: premiumStatus ? 'text-amber-700' : 'text-amber-600',
+      bg: premiumStatus ? 'bg-amber-100' : 'bg-amber-50',
+      action: () => onNavigate(premiumStatus ? 'order' : 'buy-now')
     },
     {
       id: 'invite',

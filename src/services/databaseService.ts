@@ -622,6 +622,15 @@ export const databaseService = {
             .single();
 
         if (error) throw error;
+
+        // If order is successful, set user as premium
+        if (data && data.status === 'processing') {
+            await supabase
+                .from('profiles')
+                .update({ is_premium: true })
+                .eq('id', user?.id);
+        }
+
         return data;
     },
 
@@ -962,7 +971,7 @@ export const databaseService = {
         }
     },
 
-    async syncProfile(userId: string, data: { full_name?: string; avatar_url?: string; phone?: string; email?: string }) {
+    async syncProfile(userId: string, data: { full_name?: string; avatar_url?: string; phone?: string; email?: string; is_premium?: boolean }) {
         console.log(`DatabaseService: Syncing profile for ${userId}`, data);
         const { error } = await supabase
             .from('profiles')
@@ -976,5 +985,136 @@ export const databaseService = {
             console.error('Error syncing profile:', error);
             // Ignore error if table doesn't exist or other RLS issue for now to not block auth flow
         }
+    },
+
+    // --- Points System ---
+    async getPoints() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return 0;
+
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('points')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (error) {
+            console.error('Error fetching points:', error);
+            return 0;
+        }
+        return data?.points || 0;
+    },
+
+    async getPointTransactions() {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+
+        const { data, error } = await supabase
+            .from('point_transactions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching transactions:', error);
+            return [];
+        }
+
+        return data.map(t => ({
+            id: t.id,
+            userId: t.user_id,
+            amount: t.amount,
+            type: t.type,
+            description: t.description,
+            createdAt: new Date(t.created_at).toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        }));
+    },
+
+    async redeemCoupon(code: string) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('未登录');
+
+        const upperCode = code.trim().toUpperCase();
+        let amount = 0;
+        let description = '';
+
+        if (upperCode === 'EVERSTORY500') {
+            amount = 500;
+            description = '全能500元积分兑换券';
+        } else {
+            throw new Error('无效的兑换码');
+        }
+
+        // 1. Check if already redeemed (to prevent double redemption of "universal" codes if desired)
+        // For simplicity and "universal" requirement, we'll allow once per user.
+        const { data: existing } = await supabase
+            .from('point_transactions')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('description', description)
+            .maybeSingle();
+
+        if (existing) {
+            throw new Error('您已兑换过此礼品券');
+        }
+
+        // 2. Add transaction
+        const { error: txError } = await supabase
+            .from('point_transactions')
+            .insert({
+                user_id: user.id,
+                amount: amount,
+                type: 'earn',
+                description: description
+            });
+
+        if (txError) throw txError;
+
+        // 3. Update profile points
+        const currentPoints = await this.getPoints();
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ points: currentPoints + amount })
+            .eq('id', user.id);
+
+        if (profileError) throw profileError;
+
+        return { amount, description };
+    },
+
+    async spendPoints(amount: number, description: string) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('未登录');
+
+        const currentPoints = await this.getPoints();
+        if (currentPoints < amount) throw new Error('积分不足');
+
+        // 1. Add transaction
+        const { error: txError } = await supabase
+            .from('point_transactions')
+            .insert({
+                user_id: user.id,
+                amount: amount,
+                type: 'spend',
+                description: description
+            });
+
+        if (txError) throw txError;
+
+        // 2. Update profile points
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ points: currentPoints - amount })
+            .eq('id', user.id);
+
+        if (profileError) throw profileError;
+
+        return true;
     }
 };
