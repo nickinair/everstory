@@ -507,34 +507,40 @@ export default function App() {
         <div className="px-4 py-4 space-y-4 border-t border-white/10">
           <button
             onClick={() => setIsRecommendModalOpen(true)}
-            className="w-full flex items-center text-sm text-gray-300 hover:text-white group text-left cursor-pointer"
+            className="w-full flex items-center p-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg group text-left cursor-pointer transition-colors"
           >
-            <Share2 className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100" />
-            <div className="flex-1">
+            <Share2 className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100 shrink-0" />
+            <div className="flex-1 overflow-hidden">
               <div className="flex items-center justify-between">
-                <span>推荐 Everstory</span>
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="truncate">推荐 Everstory</span>
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-full shrink-0 ml-2"></div>
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">获得免费书籍积分</div>
+              <div className="text-[10px] text-gray-400 mt-0.5 truncate">获得免费书籍积分</div>
             </div>
           </button>
           <button
             onClick={() => setIsGiftModalOpen(true)}
-            className="w-full flex items-center text-sm text-gray-300 hover:text-white group text-left cursor-pointer"
+            className="w-full flex items-center p-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg group text-left cursor-pointer transition-colors"
           >
-            <Gift className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100" />
-            <span>赠送 Everstory</span>
+            <Gift className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100 shrink-0" />
+            <div className="flex-1 overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="truncate">赠送 Everstory</span>
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5 truncate">送给长辈最开心的礼物</div>
+            </div>
           </button>
           <button
             onClick={() => setCurrentView('redemption')}
-            className={`w-full flex items-center text-sm text-gray-300 hover:text-white group text-left cursor-pointer p-1 rounded-lg transition-colors ${currentView === 'redemption' ? 'bg-white/10 text-white' : ''}`}
+            className={`w-full flex items-center p-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg group text-left cursor-pointer transition-colors ${currentView === 'redemption' ? 'bg-white/10 text-white' : ''}`}
           >
-            <Ticket className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100" />
-            <div className="flex-1">
+            <Ticket className="mr-3 w-5 h-5 opacity-70 group-hover:opacity-100 shrink-0" />
+            <div className="flex-1 overflow-hidden">
               <div className="flex items-center justify-between">
-                <span>兑换券</span>
-                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                <span className="truncate">兑换券</span>
+                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity ml-2 shrink-0" />
               </div>
+              <div className="text-[10px] text-gray-400 mt-0.5 truncate">使用兑换码增加积分</div>
             </div>
           </button>
         </div>
