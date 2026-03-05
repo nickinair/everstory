@@ -863,7 +863,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
                   <h3 className="text-2xl font-light text-gray-800">订单摘要</h3>
                   <div className="space-y-2 pt-4 border-t border-gray-50">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">免费版纪念册</span>
+                      <span className="text-gray-500">定制精装传记</span>
                       <span className="text-gray-900 font-medium">¥{basePrice.toFixed(2)}</span>
                     </div>
                     {includeEbook && (

@@ -11,7 +11,7 @@ interface UpgradeModalProps {
 export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: UpgradeModalProps) {
     const title = type === 'order-required' ? '立即订购解锁更多' : type === 'prompts' ? '提示数量已达上限' : type === 'stories' ? '故事数量已达上限' : '项目数量已达上限';
     const description =
-        type === 'order-required' ? '您已完成书籍预览。立即订购即可继续定制您的精装纪念册，永久保存这份珍贵记忆。' :
+        type === 'order-required' ? '您已完成书籍预览。立即订购即可继续定制您的定制精装传记，永久保存这份珍贵记忆。' :
             type === 'prompts' ? '免费版目前仅支持创建 2 个提示。立即升级即可解锁无限次提示引导，为您开启深度回忆之旅。' :
                 type === 'stories' ? '免费版目前仅支持手动创建 2 个故事。立即升级即可解锁无限篇幅记录，永久保存您的珍贵人生。' :
                     '免费版目前仅支持创建 2 个项目。立即升级即可开启更多家人的传记项目，记录完整家族记忆。';

@@ -52,6 +52,20 @@ export default function MembershipManagementView({
             description: '您的家庭故事、录音和高清视频资料将获得永久加密云端存储空间。',
             color: 'text-green-500',
             bg: 'bg-green-50'
+        },
+        {
+            icon: Star,
+            title: '专业级 AI 深度写作',
+            description: '基于深度学习的AI模型，为您提供文学级的传记内容润色与结构建议。',
+            color: 'text-purple-500',
+            bg: 'bg-purple-50'
+        },
+        {
+            icon: ShieldCheck,
+            title: '30天无忧退款保证',
+            description: '我们对服务充满信心。如果您在30天内不满意，我们将无条件全额退款。',
+            color: 'text-rose-500',
+            bg: 'bg-rose-50'
         }
     ];
 
@@ -124,9 +138,10 @@ export default function MembershipManagementView({
                             }}
                             className="relative"
                         >
-                            <svg width="48" height="40" viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M8 32C16 32 30 28 38 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 6" className="opacity-60" />
-                                <path d="M30 8H38V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            <svg width="48" height="32" viewBox="0 0 48 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 28C12 28 20 24 32 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 5" className="opacity-40" />
+                                <path d="M26 8H34V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                <circle cx="34" cy="8" r="1.5" fill="currentColor" />
                             </svg>
                         </motion.div>
                         <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600/50 bg-white/40 px-2 py-0.5 rounded-lg backdrop-blur-[2px] border border-amber-50/50">Upgrade</span>
@@ -175,7 +190,7 @@ export default function MembershipManagementView({
                                 </div>
                                 <div className="relative flex items-center space-x-3">
                                     <div className="w-1.5 h-1.5 rounded-full bg-amber-200 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
-                                    <span className="text-sm text-amber-100 font-bold">30天无忧退款保证</span>
+                                    <span className="text-sm text-amber-100">30天无忧退款保证</span>
                                 </div>
                             </div>
                             <button className="mt-8 w-full py-3 bg-white text-amber-600 rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center space-x-2">
@@ -243,7 +258,7 @@ export default function MembershipManagementView({
 
             {/* Benefits Section */}
             <h3 className="text-lg font-bold text-gray-800 mb-6 px-2">尊享版核心权益</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
                 {benefits.map((benefit, idx) => (
                     <motion.div
                         key={benefit.title}

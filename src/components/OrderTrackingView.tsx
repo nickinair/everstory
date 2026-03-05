@@ -14,7 +14,7 @@ export default function OrderTrackingView({ onOrderClick, onNewOrder }: OrderTra
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 lg:mb-8 space-y-4 sm:space-y-0">
         <div>
           <h2 className="text-2xl lg:text-3xl font-light text-gray-800">我的订单</h2>
-          <p className="text-sm lg:text-base text-gray-500 mt-1 lg:mt-2">跟踪您的纪念册制作和物流进度</p>
+          <p className="text-sm lg:text-base text-gray-500 mt-1 lg:mt-2">跟踪您的定制精装传记制作和物流进度</p>
         </div>
         <button
           onClick={onNewOrder}
@@ -100,7 +100,7 @@ export default function OrderTrackingView({ onOrderClick, onNewOrder }: OrderTra
         <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
           <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900">暂无订单</h3>
-          <p className="text-gray-500 mt-2">您还没有订购过任何纪念册</p>
+          <p className="text-gray-500 mt-2">您还没有订购过任何定制精装传记</p>
           <button
             onClick={onNewOrder}
             className="mt-6 bg-accent text-white px-8 py-2 rounded-lg font-medium"
