@@ -642,6 +642,13 @@ export const databaseService = {
         const MOCK_INVITES_KEY = 'everstory-mock-invitations';
         const isEmail = identifier.includes('@');
 
+        const normalizePhone = (p: string) => {
+            const clean = p.replace(/\D/g, '');
+            return clean.length === 11 ? `+86${clean}` : (clean.startsWith('86') && clean.length === 13 ? `+${clean}` : p);
+        };
+
+        const normalizedIdentifier = isEmail ? identifier.trim().toLowerCase() : normalizePhone(identifier);
+
         const getMockInvites = () => {
             const data = localStorage.getItem(MOCK_INVITES_KEY);
             return data ? JSON.parse(data) : [];
@@ -664,7 +671,7 @@ export const databaseService = {
             // Use select to check if exists or insert with specific handling
             const { error } = await supabase.from('project_invitations').insert({
                 project_id: projectId,
-                [isEmail ? 'email' : 'phone']: identifier
+                [isEmail ? 'email' : 'phone']: normalizedIdentifier
             });
 
             if (error) {
@@ -728,10 +735,17 @@ export const databaseService = {
     async checkAndProcessInvitations(userId: string, identifier: string) {
         console.log(`DatabaseService: Checking invitations for ${identifier}`);
         const MOCK_INVITES_KEY = 'everstory-mock-invitations';
+        const isEmail = identifier.includes('@');
+
+        const normalizePhone = (p: string) => {
+            const clean = p.replace(/\D/g, '');
+            if (clean.length === 11) return `+86${clean}`;
+            if (clean.startsWith('86') && clean.length === 13) return `+${clean}`;
+            return p;
+        };
 
         // Normalize identifier
-        const normalizedIdentifier = identifier.trim().toLowerCase();
-        const isEmail = normalizedIdentifier.includes('@');
+        const normalizedIdentifier = isEmail ? identifier.trim().toLowerCase() : normalizePhone(identifier);
 
         const getMockInvites = () => {
             const data = localStorage.getItem(MOCK_INVITES_KEY);
