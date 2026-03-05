@@ -232,8 +232,8 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
             <div className="w-full lg:w-1/3 space-y-6 lg:space-y-8">
               <div>
-                <h2 className="text-2xl lg:text-3xl font-light text-gray-800 mb-2 lg:mb-4">定制您的书封</h2>
-                <p className="text-sm lg:text-base text-gray-600 leading-relaxed">
+                <h2 className="text-lg lg:text-3xl font-light text-gray-800 mb-1 lg:mb-4">定制您的书封</h2>
+                <p className="text-xs lg:text-base text-gray-600 leading-relaxed">
                   打造一个像您收集的故事一样独一无二的封面，挑选一种颜色，添加一张特别的照片，并赋予它一个引起共鸣的标题。
                 </p>
               </div>
@@ -460,11 +460,11 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
         {step === 'review' && (
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
             <div className="lg:w-1/3 flex-shrink-0 space-y-4 lg:space-y-6">
-              <h2 className="text-2xl lg:text-3xl font-light text-gray-800">查看并排序您的故事</h2>
-              <p className="text-gray-500 text-sm leading-relaxed">
+              <h2 className="text-lg lg:text-3xl font-light text-gray-800 mb-1">查看并排序您的故事</h2>
+              <p className="text-gray-500 text-xs lg:text-base leading-relaxed">
                 上下拖动故事以更改顺序，或排除您不想放入书中的任何内容。
               </p>
-              <p className="text-sm text-gray-700 font-medium">
+              <p className="text-xs lg:text-sm text-gray-700 font-medium">
                 已包含 {stories.length} 个故事中的 {includedStories.length} 个
               </p>
               {hasLowResIssue && (
@@ -569,21 +569,21 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
           return (
             <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
               <div className="w-full lg:w-1/3 lg:max-w-md flex flex-col pt-4">
-                <h2 className="text-2xl lg:text-3xl font-light text-gray-800 mb-4 lg:mb-6">预览您的书</h2>
-                <div className="bg-white/50 border border-gray-100 rounded-2xl p-6 mb-6 space-y-4 shadow-sm">
-                  <div className="flex justify-between items-end pb-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-400">总计页数</span>
-                    <span className="text-xl font-bold text-gray-800">{totalPages} 页</span>
+                <h2 className="text-lg lg:text-3xl font-light text-gray-800 mb-2 lg:mb-6">预览您的书</h2>
+                <div className="bg-white/50 border border-gray-100 rounded-xl lg:rounded-2xl p-3 lg:p-6 mb-3 lg:mb-6 space-y-2 lg:space-y-4 shadow-sm">
+                  <div className="flex justify-between items-center pb-1 lg:pb-2 border-b border-gray-50">
+                    <span className="text-xs lg:text-sm text-gray-400">总计页数</span>
+                    <span className="text-base lg:text-xl font-bold text-gray-800">{totalPages} 页</span>
                   </div>
-                  <div className="flex justify-between items-end pb-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-400">故事数量</span>
-                    <span className="text-xl font-bold text-gray-800">{includedStories.length} 个故事</span>
+                  <div className="flex justify-between items-center pb-1 lg:pb-2 border-b border-gray-50">
+                    <span className="text-xs lg:text-sm text-gray-400">故事数量</span>
+                    <span className="text-base lg:text-xl font-bold text-gray-800">{includedStories.length} 个故事</span>
                   </div>
-                  <p className="text-sm text-gray-500 leading-relaxed italic pt-2">
+                  <p className="text-[10px] lg:text-sm text-gray-500 leading-relaxed italic pt-1">
                     "请检查您的书籍内容以确认故事和顺序。您的书内容已自动根据您选择的故事生成排版。"
                   </p>
                 </div>
-                <a className="text-gray-500 hover:text-gray-700 underline text-sm mb-10 block w-fit" href="#">
+                <a className="text-gray-500 hover:text-gray-700 underline text-[10px] lg:text-sm mb-4 lg:mb-10 block w-fit" href="#">
                   了解更多关于打印和扫码逻辑
                 </a>
                 <div className="flex gap-4 mt-auto mb-12 hidden lg:flex">
@@ -727,9 +727,9 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
         {step === 'addons' && (
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 max-w-6xl mx-auto py-4 lg:py-8">
             <div className="flex-1 space-y-6 lg:space-y-8">
-              <h2 className="text-2xl lg:text-4xl font-light text-gray-800 mb-6 lg:mb-10">更多定制</h2>
+              <h2 className="text-lg lg:text-4xl font-light text-gray-800 mb-4 lg:mb-10">更多定制</h2>
 
-              <div className={`p-4 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-4 lg:gap-6 items-center ${includeEbook ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'}`} onClick={() => setIncludeEbook(!includeEbook)}>
+              <div className={`p-3 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-3 lg:gap-6 items-center ${includeEbook ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'}`} onClick={() => setIncludeEbook(!includeEbook)}>
                 <div className="flex items-center w-full sm:w-auto">
                   <input
                     type="checkbox"
@@ -739,7 +739,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
                   />
                   <span className="sm:hidden ml-3 font-bold text-gray-800">添加电子书</span>
                 </div>
-                <div className="w-24 lg:w-32 h-32 lg:h-40 bg-gray-100 rounded-lg overflow-hidden shadow-md flex-shrink-0">
+                <div className="w-20 lg:w-32 h-24 lg:h-40 bg-gray-100 rounded-lg overflow-hidden shadow-md flex-shrink-0">
                   <img
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtPW8FRM5OO0_uXCSzPqNVuxJjMzs6PYU3CARbtjBU_R54BK0gh_b5gsOmaM5XK2Nfq2J8UFcoZfFNqSvLLYJWiTBxHzmVAo695mUmo37LdGBc1bbc-3me5oSJS-dLyBjktkom00esJdfx4eQzSr5fqODQr5eRmAbkY-eDtFfV5topMuqf48m7bHlzW2rkQsHl2ObjS4XcNrMaouB8JZPkQXfwxzA4VeGE74Fse25HIcMovX2PkfTpU7d4TCUZTYLqq0R-uK8w4YY"
                     alt="E-book"
@@ -760,7 +760,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
                 </div>
               </div>
 
-              <div className={`p-4 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-4 lg:gap-6 items-center ${includeExtraHardcover ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'}`} onClick={() => setIncludeExtraHardcover(!includeExtraHardcover)}>
+              <div className={`p-3 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-3 lg:gap-6 items-center ${includeExtraHardcover ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'}`} onClick={() => setIncludeExtraHardcover(!includeExtraHardcover)}>
                 <div className="flex items-center w-full sm:w-auto">
                   <input
                     type="checkbox"
@@ -770,7 +770,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
                   />
                   <span className="sm:hidden ml-3 font-bold text-gray-800">添加精装书</span>
                 </div>
-                <div className="w-24 lg:w-32 h-32 lg:h-40 flex-shrink-0 relative">
+                <div className="w-20 lg:w-32 h-24 lg:h-40 flex-shrink-0 relative">
                   <div className="absolute inset-0 bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden">
                     <img
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtPW8FRM5OO0_uXCSzPqNVuxJjMzs6PYU3CARbtjBU_R54BK0gh_b5gsOmaM5XK2Nfq2J8UFcoZfFNqSvLLYJWiTBxHzmVAo695mUmo37LdGBc1bbc-3me5oSJS-dLyBjktkom00esJdfx4eQzSr5fqODQr5eRmAbkY-eDtFfV5topMuqf48m7bHlzW2rkQsHl2ObjS4XcNrMaouB8JZPkQXfwxzA4VeGE74Fse25HIcMovX2PkfTpU7d4TCUZTYLqq0R-uK8w4YY"
@@ -860,7 +860,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
             <div className="w-full lg:w-[400px] space-y-8">
               <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100 relative overflow-hidden">
                 <div className="space-y-4">
-                  <h3 className="text-2xl font-light text-gray-800">订单摘要</h3>
+                  <h3 className="text-lg lg:text-2xl font-light text-gray-800">订单摘要</h3>
                   <div className="space-y-2 pt-4 border-t border-gray-50">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">定制精装传记</span>
@@ -901,7 +901,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
         {step === 'order' && (
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 max-w-6xl mx-auto py-4 lg:py-8">
             <div className="flex-1 space-y-8 lg:space-y-12">
-              <h2 className="text-2xl lg:text-4xl font-light text-gray-800 mb-6 lg:mb-10">确认您的订单</h2>
+              <h2 className="text-lg lg:text-4xl font-light text-gray-800 mb-4 lg:mb-10">确认您的订单</h2>
               <div className="pt-12 flex gap-4 w-full hidden lg:flex">
                 <button onClick={() => setStep('addons')} className="flex-1 py-4 bg-white border border-gray-300 text-gray-600 rounded-xl font-bold transition-all cursor-pointer">上一步</button>
                 <button

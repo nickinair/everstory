@@ -61,14 +61,14 @@ export default function StoriesView({
 
   return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto">
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 lg:mb-10 space-y-4 sm:space-y-0">
-        <h1 className="text-2xl lg:text-3xl font-light text-gray-800">故事</h1>
-        <div className="flex items-center justify-between sm:justify-end space-x-4">
-          <div className="flex -space-x-2 mr-3">
-            {members.slice(0, 4).map((member) => (
+      <header className="flex items-center justify-between mb-6 lg:mb-10">
+        <h1 className="text-2xl lg:text-3xl font-light text-gray-800 shrink-0">故事</h1>
+        <div className="flex items-center justify-end space-x-2 sm:space-x-4 overflow-hidden">
+          <div className="flex -space-x-2 mr-1 sm:mr-3">
+            {members.slice(0, 7).map((member) => (
               <div
                 key={member.id}
-                className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 relative"
+                className="h-7 w-7 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 relative"
                 style={{ zIndex: 10 }}
               >
                 <img
@@ -79,9 +79,9 @@ export default function StoriesView({
                 />
               </div>
             ))}
-            {members.length > 4 && (
-              <div className="h-8 w-8 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-800 flex items-center justify-center text-[10px] lg:text-xs font-bold text-white shrink-0 relative z-20">
-                +{members.length - 4}
+            {members.length > 7 && (
+              <div className="h-7 w-7 lg:h-9 lg:w-9 rounded-full ring-2 ring-background-light bg-gray-800 flex items-center justify-center text-[9px] lg:text-xs font-bold text-white shrink-0 relative z-20">
+                +{members.length - 7}
               </div>
             )}
           </div>

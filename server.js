@@ -17,7 +17,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 dotenv.config({ path: path.resolve(__dirname, '.env.local') }); // Override with .env.local if present
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3005;
 
 // Middleware
 app.use(cors());
@@ -489,6 +489,7 @@ app.post('/api/auth/update-phone', async (req, res) => {
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_BASE_URL = process.env.GEMINI_BASE_URL; // Optional: for users in restricted regions
+const PROXY_AUTH_TOKEN = process.env.PROXY_AUTH_TOKEN; // 增加这一行
 let genAI = null;
 if (GEMINI_API_KEY) {
   const options = { apiKey: GEMINI_API_KEY };
@@ -526,14 +527,39 @@ async function withRetry(fn, initialDelay = 1000) {
 }
 
 app.post('/api/ai/process', async (req, res) => {
+  const { action, payload } = req.body;
+
+  // --- Forward to Proxy if configured ---
+  if (GEMINI_BASE_URL) {
+    try {
+      console.log('Sending Token:', PROXY_AUTH_TOKEN);
+      console.log(`Forwarding AI request to proxy - Action: ${action}`);
+      const response = await fetch(`${GEMINI_BASE_URL}/api/ai/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(PROXY_AUTH_TOKEN ? { 'Authorization': `Bearer ${PROXY_AUTH_TOKEN}` } : {})
+        },
+        body: JSON.stringify({ action, payload })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Proxy request failed');
+      return res.json(data);
+    } catch (error) {
+      console.error('Gemini Proxy Forwarding Error:', error.message);
+      // Fall through to local SDK if proxy fails, or return error
+      return res.status(500).json({ error: `Proxy Error: ${error.message}` });
+    }
+  }
+
+  // --- Local SDK Logic (Fallback) ---
   if (!genAI) {
     return res.status(500).json({ error: 'Gemini API not configured on server' });
   }
 
-  const { action, payload } = req.body;
-
   try {
-    console.log(`AI Proxy request - Action: ${action}, payload keys: ${Object.keys(payload)}`);
+    console.log(`AI Local request - Action: ${action}, payload keys: ${Object.keys(payload)}`);
     let result;
     switch (action) {
       case 'generateStory':
@@ -573,13 +599,11 @@ app.post('/api/ai/process', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    console.error(`AI Proxy error (${action}):`, error);
-    // Extract a cleaner error message if possible
+    console.error(`AI Local error (${action}):`, error);
     let errorMsg = error.message || 'AI processing failed';
     if (error.status && error.statusText) {
       errorMsg = `${error.status} ${error.statusText}: ${errorMsg}`;
     }
-    // Include the original error data if present (for deep debugging)
     if (error.error) {
       errorMsg += ` - Data: ${JSON.stringify(error.error)}`;
     }
@@ -606,6 +630,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Email SMTP server running on port ${PORT}`);
 });
