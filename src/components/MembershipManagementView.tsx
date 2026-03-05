@@ -64,7 +64,7 @@ export default function MembershipManagementView({
                     className="flex items-center text-gray-500 hover:text-gray-800 transition cursor-pointer"
                 >
                     <ChevronLeft className="w-5 h-5 mr-1" />
-                    <span>返回设置</span>
+                    <span>返回</span>
                 </button>
                 <h1 className="text-xl font-medium text-gray-800">订阅计划</h1>
                 <div className="w-20" /> {/* Spacer for centering */}

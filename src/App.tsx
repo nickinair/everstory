@@ -69,6 +69,7 @@ export default function App() {
     return localStorage.getItem('everstory-last-project-id');
   });
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+  const [membershipBackTarget, setMembershipBackTarget] = useState<ViewType>('account');
 
   // Data State
   const [projects, setProjects] = useState<Project[]>([]);
@@ -598,6 +599,9 @@ export default function App() {
                           setIsOrdering(true);
                           setOrderBackToHome(true);
                         }
+                        if (view === 'membership') {
+                          setMembershipBackTarget('home');
+                        }
                         setCurrentView(view as ViewType);
                       }}
                       hasOrder={hasOrder}
@@ -772,14 +776,19 @@ export default function App() {
             {currentView === 'account' && (
               <AccountSettingsView
                 currentUser={currentUser}
-                onNavigate={(view) => setCurrentView(view as any)}
+                onNavigate={(view) => {
+                  if (view === 'membership') {
+                    setMembershipBackTarget('account');
+                  }
+                  setCurrentView(view as any);
+                }}
               />
             )}
             {currentView === 'membership' && (
               <MembershipManagementView
                 currentUser={currentUser}
                 orders={orders}
-                onBack={() => setCurrentView('account')}
+                onBack={() => setCurrentView(membershipBackTarget)}
                 onRenew={() => {
                   setCurrentView('upgrade-payment');
                 }}
