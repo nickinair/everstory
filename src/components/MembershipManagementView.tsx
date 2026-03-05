@@ -41,15 +41,15 @@ export default function MembershipManagementView({
         },
         {
             icon: BookOpen,
-            title: '精装传记书籍',
-            description: '包含一本价值¥599的线下精装纸质传记，全国包邮。',
+            title: '定制精装传记',
+            description: '包含一份尊享定制的线下精装纸质传记，支持个性化排版，全国包邮。',
             color: 'text-blue-500',
             bg: 'bg-blue-50'
         },
         {
             icon: ShieldCheck,
-            title: '永久云端存储',
-            description: '您的家庭故事和多媒体资料将获得永久加密存储空间。',
+            title: '永久云端音视频存储',
+            description: '您的家庭故事、录音和高清视频资料将获得永久加密云端存储空间。',
             color: 'text-green-500',
             bg: 'bg-green-50'
         }
@@ -100,7 +100,7 @@ export default function MembershipManagementView({
                                 </div>
                                 <div className="flex items-center space-x-3 text-gray-400 opacity-50">
                                     <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                                    <span className="text-sm line-through">精装纸质纪念册</span>
+                                    <span className="text-sm line-through">定制精装传记</span>
                                 </div>
                             </div>
                         </div>
@@ -116,20 +116,20 @@ export default function MembershipManagementView({
                             animate={{
                                 opacity: 1,
                                 scale: 1,
-                                y: [0, -8, 0],
+                                y: [0, -6, 0],
                             }}
                             transition={{
-                                y: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                                y: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
                                 opacity: { duration: 0.5 }
                             }}
                             className="relative"
                         >
-                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 30C15 30 25 25 30 15" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4 4" />
-                                <path d="M25 15H30V20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            <svg width="48" height="40" viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 32C16 32 30 28 38 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 6" className="opacity-60" />
+                                <path d="M30 8H38V16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </motion.div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60 bg-white/50 px-2 py-0.5 rounded-full backdrop-blur-sm shadow-sm border border-amber-50">Upgrade</span>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600/50 bg-white/40 px-2 py-0.5 rounded-lg backdrop-blur-[2px] border border-amber-50/50">Upgrade</span>
                     </div>
 
                     <div className="md:hidden py-2 text-amber-500">
@@ -163,11 +163,19 @@ export default function MembershipManagementView({
                                 </div>
                                 <div className="flex items-center space-x-3 font-medium">
                                     <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                                    <span className="text-sm">价值¥599精装传记</span>
+                                    <span className="text-sm">定制精装传记</span>
                                 </div>
                                 <div className="flex items-center space-x-3">
                                     <div className="w-1.5 h-1.5 rounded-full bg-white" />
                                     <span className="text-sm">专业级 AI 深度写作</span>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white/80" />
+                                    <span className="text-sm text-white/90">永久云端音视频存储</span>
+                                </div>
+                                <div className="relative flex items-center space-x-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-200 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
+                                    <span className="text-sm text-amber-100 font-bold">30天无忧退款保证</span>
                                 </div>
                             </div>
                             <button className="mt-8 w-full py-3 bg-white text-amber-600 rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center space-x-2">
@@ -213,7 +221,7 @@ export default function MembershipManagementView({
                                 <CreditCard className="w-5 h-5 text-amber-900/40" />
                                 <div>
                                     <p className="text-xs font-medium uppercase tracking-wider text-amber-900/50">当前套餐</p>
-                                    <p className="text-lg font-bold">精装传记尊享版</p>
+                                    <p className="text-lg font-bold">定制精装传记尊享版</p>
                                 </div>
                             </div>
                         </div>
