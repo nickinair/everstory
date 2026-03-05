@@ -128,6 +128,7 @@ export default function PromptsView({
 
   const [sharePrompt, setSharePrompt] = useState<Prompt | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showWeChatModal, setShowWeChatModal] = useState(false);
 
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
   const [selectionStep, setSelectionStep] = useState<'main' | 'select' | 'review'>('main');
@@ -470,16 +471,22 @@ export default function PromptsView({
                   </button>
                 )}
                 {!prompt.isRecorded && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShare(prompt);
-                    }}
-                    className="px-2 sm:px-3 py-1 sm:py-1.5 border border-blue-200 bg-blue-50 text-blue-600 rounded text-xs sm:text-sm font-medium hover:bg-blue-100 transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">分享给讲述人</span>
-                  </button>
+                  <div className="relative group/share">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShare(prompt);
+                      }}
+                      className="p-1.5 sm:p-2 border border-blue-200 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </button>
+                    {/* Fast Tooltip */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-[10px] font-medium rounded opacity-0 group-hover/share:opacity-100 pointer-events-none transition-all duration-75 whitespace-nowrap z-20 shadow-xl">
+                      分享给讲述人
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                    </div>
+                  </div>
                 )}
                 <button
                   onClick={(e) => {
@@ -545,26 +552,85 @@ export default function PromptsView({
                   <p className="text-sm text-gray-800 leading-snug">{sharePrompt.question}</p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-500 truncate font-mono">
-                    {getShareLink(sharePrompt)}
-                  </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-500 break-all font-mono mb-4 leading-relaxed max-h-24 overflow-y-auto">
+                  {getShareLink(sharePrompt)}
+                </div>
+
+                <div className="flex items-center gap-3">
                   <button
                     onClick={async () => {
                       await navigator.clipboard.writeText(getShareLink(sharePrompt!));
                       setLinkCopied(true);
                       setTimeout(() => setLinkCopied(false), 3000);
                     }}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${linkCopied
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all cursor-pointer ${linkCopied
                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                      : 'bg-primary text-white hover:bg-primary/90'
+                      : 'bg-primary text-white hover:bg-primary/90 shadow-md'
                       }`}
                   >
                     {linkCopied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {linkCopied ? '已复制' : '复制'}
+                    {linkCopied ? '已复制链接' : '复制链接'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(getShareLink(sharePrompt!));
+                      setShowWeChatModal(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#07C160]/10 hover:bg-[#07C160]/20 text-[#07C160] rounded-xl text-sm font-bold transition-all cursor-pointer"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+                      <path d="M8.5 13.5c-.828 0-1.5-.672-1.5-1.5s.672-1.5 1.5-1.5 1.5.672 1.5 1.5-.672 1.5-1.5 1.5zm7 0c-.828 0-1.5-.672-1.5-1.5s.672-1.5 1.5-1.5 1.5.672 1.5 1.5-.672 1.5-1.5 1.5zm-3.5-6c-4.418 0-8 3.134-8 7 0 2.054 1.028 3.9 2.68 5.234l-.68 1.766 2.375-1.188c1.135.438 2.385.688 3.625.688 4.418 0 8-3.134 8-7s-3.582-7-8-7z" stroke="none" />
+                    </svg>
+                    发到微信
                   </button>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* WeChat Share Modal */}
+      <AnimatePresence>
+        {showWeChatModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[70] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden text-center p-8 relative"
+            >
+              <button
+                onClick={() => setShowWeChatModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-16 h-16 bg-[#07C160]/10 text-[#07C160] rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCheck className="w-8 h-8" />
+              </div>
+
+              <h3 className="text-xl font-bold text-gray-900 mb-2">链接已复制成功</h3>
+              <p className="text-gray-500 mb-8 text-sm">
+                现在您可以打开微信，将链接粘贴发送给您的亲友或讲述人啦。
+              </p>
+
+              <button
+                onClick={() => {
+                  setShowWeChatModal(false);
+                  window.location.href = 'weixin://';
+                }}
+                className="w-full py-3.5 bg-[#07C160] text-white rounded-xl font-bold hover:bg-[#06ad56] transition-all shadow-lg shadow-[#07C160]/30"
+              >
+                打开微信
+              </button>
+              <button
+                onClick={() => setShowWeChatModal(false)}
+                className="w-full py-3.5 mt-3 text-gray-500 hover:text-gray-800 rounded-xl font-medium transition-all"
+              >
+                稍后自己打开
+              </button>
             </motion.div>
           </div>
         )}
@@ -989,7 +1055,7 @@ export default function PromptsView({
                   <div className="p-6 space-y-6">
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                       <p className="text-sm text-blue-700">
-                        您已选择 <strong>{selectedQuestionIds.length}</strong> 个问题。{!hasOrder && (prompts.length + selectedQuestionIds.length) > 2 && <span className="text-red-500 ml-2 font-bold">(超过2个限制)</span>}
+                        您已选择 <strong>{selectedQuestionIds.length}</strong> 个问题。{!hasOrder && (prompts.length + selectedQuestionIds.length) > 10 && <span className="text-red-500 ml-2 font-bold">(超过10个限制)</span>}
                       </p>
                     </div>
                     <div className="space-y-3">

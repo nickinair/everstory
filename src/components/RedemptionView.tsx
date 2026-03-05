@@ -13,8 +13,10 @@ import {
     Loader2,
     Wallet
 } from 'lucide-react';
+import PremiumBanner from './PremiumBanner';
 import { databaseService } from '../services/databaseService';
-import { PointTransaction } from '../types';
+import { PointTransaction, User as UserType } from '../types';
+import BookLoader from './BookLoader';
 
 interface RedemptionViewProps {
     onBack: () => void;
@@ -91,23 +93,21 @@ export default function RedemptionView({ onBack, onUpdate }: RedemptionViewProps
     if (loading) {
         return (
             <div className="flex flex-col h-full bg-gray-50 items-center justify-center">
-                <Loader2 className="w-8 h-8 text-accent animate-spin mb-4" />
-                <p className="text-gray-500 font-medium">加载中...</p>
+                <BookLoader />
             </div>
         );
     }
 
     return (
         <div className="flex flex-col h-full bg-gray-50">
-            <header className="px-4 lg:px-8 py-4 bg-white border-b border-gray-200 flex items-center shrink-0">
-                <button
-                    onClick={onBack}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors mr-4"
-                >
-                    <ArrowLeft className="w-5 h-5 text-gray-600" />
-                </button>
-                <h1 className="text-xl font-light text-gray-800">积分中心</h1>
-            </header>
+            <PremiumBanner
+                title="积分中心"
+                subtitle="Points Center"
+                icon={Wallet}
+                onBack={onBack}
+                gradientClass="from-emerald-100 via-emerald-50 to-white"
+                iconBgClass="bg-emerald-500"
+            />
 
             <div className="flex-1 overflow-y-auto p-4 lg:p-8">
                 <div className="max-w-2xl mx-auto space-y-6">

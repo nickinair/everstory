@@ -142,7 +142,8 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
         if (!finalImageUrl) finalImageUrl = videoUrl;
       } else {
         // Just upload image
-        finalImageUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories`);
+        const timestamp = Date.now();
+        finalImageUrl = await databaseService.uploadMedia(mediaFile, `stories/image_${timestamp}_${mediaFile.name}`);
       }
 
       // 3. Create Story
@@ -151,7 +152,7 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
         content: content,
         imageUrl: finalImageUrl,
         videoUrl: videoUrl || undefined,
-        type: mediaType === 'video' ? 'video' : 'audio',
+        type: mediaType === 'video' ? 'video' : 'image',
       });
 
       alert('故事保存成功！');

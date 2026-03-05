@@ -209,203 +209,237 @@ export default function AuthView() {
     return (
         <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center p-4">
             <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 w-full max-w-md"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex bg-white rounded-[2rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] border border-white/50 w-full max-w-[440px] md:max-w-[480px] overflow-hidden min-h-[600px]"
             >
-                {(isDeepLink || isInviteLink) && (
-                    <div className="mb-6 p-4 bg-teal-50 border border-teal-100 rounded-2xl text-center">
-                        <div className="text-2xl mb-1">{isInviteLink ? '🤝' : '🎙️'}</div>
-                        <p className="text-sm font-semibold text-teal-800">
-                            {isInviteLink ? '您收到一个项目邀请' : '点击录制链接'}
-                        </p>
-                        <p className="text-xs text-teal-600 mt-0.5">
-                            {isInviteLink ? '登录后将自动加入该项目' : '登录后将直接进入录制界面'}
-                        </p>
+                {/* Notebook Spine */}
+                <div className="w-12 md:w-14 bg-[#134E4A] flex flex-col items-center justify-center relative shadow-[inset_-8px_0_20px_rgba(0,0,0,0.25)]">
+                    {/* Spine Decorative Indent/Stitching */}
+                    <div className="absolute right-3 top-0 bottom-0 w-[1px] bg-white/10" />
+                    <div className="absolute right-4 top-0 bottom-0 w-[1px] bg-black/10" />
+
+                    <div className="flex flex-col items-center py-10">
+                        <span
+                            className="text-[11px] md:text-[13px] font-medium tracking-[0.4em] text-white/40 uppercase whitespace-nowrap select-none relative -left-[2px] md:-left-[3px]"
+                            style={{
+                                writingMode: 'vertical-rl'
+                            }}
+                        >
+                            AI 驱动的家族记忆空间
+                        </span>
                     </div>
-                )}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-serif text-gray-800 mb-2">长生記</h1>
-                    <p className="text-gray-500">
-                        {mode === 'login' ? '欢迎回来' : mode === 'register' ? '创建属于您的故事' : '找回您的账户'}
-                    </p>
+
+                    {/* Spine Bottom Detail */}
+                    <div className="absolute bottom-8 flex flex-col space-y-2 opacity-20">
+                        <div className="w-3 h-[1px] bg-white" />
+                        <div className="w-1.5 h-[1px] bg-white mx-auto" />
+                    </div>
                 </div>
 
-                {error && (
-                    <div className="mb-6 p-4 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 flex items-center">
-                        <span className="flex-1 text-center">{error}</span>
-                    </div>
-                )}
+                {/* Notebook Cover/Content Area */}
+                <div className="flex-1 px-6 py-8 md:px-10 md:py-12 flex flex-col bg-gradient-to-br from-[#FDFBF7] via-white to-[#F9F8F5] relative">
+                    {/* Paper Texture Overlay */}
+                    <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/natural-paper.png")' }}></div>
 
-                {/* Account Method Tabs */}
-                <div className="flex p-1 bg-gray-100 rounded-xl mb-8">
-                    <button
-                        onClick={() => setMethod('phone')}
-                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer ${method === 'phone' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Phone className="w-4 h-4" />
-                        <span>手机号</span>
-                    </button>
-                    <button
-                        onClick={() => setMethod('email')}
-                        className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer ${method === 'email' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        <Mail className="w-4 h-4" />
-                        <span>电子邮箱</span>
-                    </button>
-                </div>
-
-                <div className="space-y-5">
-                    <form
-                        onSubmit={mode === 'login' ? handleLogin : (mode === 'register' ? handleRegister : handleResetPassword)}
-                        className="space-y-5"
-                    >
-                        {/* IDENTIFIER FIELD */}
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">
-                                {method === 'phone' ? '手机号码' : '电子邮箱'}
-                            </label>
-                            <div className="relative">
-                                {method === 'phone' ? (
-                                    <>
-                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                        <input
-                                            type="tel"
-                                            required
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                            placeholder="输入手机号"
-                                        />
-                                    </>
-                                ) : (
-                                    <>
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                        <input
-                                            type="email"
-                                            required
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                            placeholder="example@everstory.cc"
-                                        />
-                                    </>
-                                )}
+                    <div className="relative z-10 flex flex-col h-full">
+                        {(isDeepLink || isInviteLink) && (
+                            <div className="mb-6 p-4 bg-teal-50/80 backdrop-blur-sm border border-teal-100 rounded-2xl text-center shadow-sm">
+                                <div className="text-2xl mb-1">{isInviteLink ? '🤝' : '🎙️'}</div>
+                                <p className="text-sm font-bold text-teal-800">
+                                    {isInviteLink ? '您收到一个项目邀请' : '点击录制链接'}
+                                </p>
+                                <p className="text-[11px] text-teal-600 mt-0.5">
+                                    {isInviteLink ? '登录后将自动加入该项目' : '登录后将直接进入录制界面'}
+                                </p>
                             </div>
+                        )}
+
+                        <div className="text-center mb-10">
+                            <h1 className="text-4xl font-serif text-gray-800 mb-2 font-light tracking-[0.3em] pl-[0.3em]">长生記</h1>
+                            <p className="text-[14px] text-gray-400 tracking-[0.1em] uppercase">
+                                让每一代人的故事永存
+                            </p>
                         </div>
 
-                        {/* NAME FIELD (REGISTER ONLY) */}
-                        {mode === 'register' && (
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">您的姓名</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        required
-                                        value={fullName}
-                                        onChange={(e) => setFullName(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                        placeholder="如何称呼您"
-                                    />
-                                </div>
+                        {error && (
+                            <div className="mb-6 p-4 bg-red-50/80 backdrop-blur-sm text-red-600 text-[11px] rounded-xl border border-red-100 flex items-center shadow-sm animate-shake">
+                                <span className="flex-1 text-center font-medium">{error}</span>
                             </div>
                         )}
 
-                        {/* OTP FIELD (REGISTER & FORGOT) */}
-                        {mode !== 'login' && (
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">验证码</label>
-                                <div className="flex space-x-3">
-                                    <div className="relative flex-1">
-                                        <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                        <input
-                                            type="text"
-                                            required
-                                            value={otpCode}
-                                            onChange={(e) => setOtpCode(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                            placeholder="输入6位验证码"
-                                            maxLength={6}
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        disabled={countdown > 0}
-                                        onClick={handleSendOTP}
-                                        className="px-4 py-3 text-xs font-bold bg-green-50 text-primary border border-green-100 rounded-xl hover:bg-green-100 transition whitespace-nowrap disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                                    >
-                                        {countdown > 0 ? `${countdown}s` : '获取验证码'}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* PASSWORD FIELD */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center pl-1">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                    {mode === 'login' ? '密码' : '设置登录密码'}
-                                </label>
-                                {mode === 'login' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setMode('forgot')}
-                                        className="text-xs text-primary font-bold hover:underline cursor-pointer"
-                                    >
-                                        忘记密码？
-                                    </button>
-                                )}
-                            </div>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-12 pr-12 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                    placeholder={mode === 'login' ? "输入密码" : "至少6位字符"}
-                                    minLength={mode === 'login' ? 1 : 6}
-                                />
+                        <form onSubmit={mode === 'login' ? handleLogin : mode === 'register' ? handleRegister : handleResetPassword} className="space-y-4 flex-1 flex flex-col">
+                            {/* Account Method Tabs */}
+                            <div className="flex p-1 bg-gray-900/[0.03] rounded-lg mb-6">
                                 <button
                                     type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                    onClick={() => setMethod('phone')}
+                                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer ${method === 'phone' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    <Phone className="w-3.5 h-3.5" />
+                                    <span>手机号</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setMethod('email')}
+                                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center space-x-2 cursor-pointer ${method === 'email' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    <span>电子邮箱</span>
                                 </button>
                             </div>
+
+                            {/* FORM FIELDS */}
+                            <div className="space-y-4">
+                                {method === 'phone' ? (
+                                    <div className="space-y-1.5 group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1 block transition-colors group-focus-within:text-primary">手机号码</label>
+                                        <div className="relative">
+                                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors group-focus-within:text-primary" />
+                                            <input
+                                                type="tel"
+                                                required
+                                                value={phone}
+                                                onChange={(e) => setPhone(e.target.value)}
+                                                className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300"
+                                                placeholder="输入手机号"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5 group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1 block transition-colors group-focus-within:text-primary">电子邮箱</label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors group-focus-within:text-primary" />
+                                            <input
+                                                type="email"
+                                                required
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300"
+                                                placeholder="输入邮箱地址"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {mode === 'register' && (
+                                    <div className="space-y-1.5 group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1 block transition-colors group-focus-within:text-primary">您的姓名</label>
+                                        <div className="relative">
+                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors group-focus-within:text-primary" />
+                                            <input
+                                                type="text"
+                                                required
+                                                value={fullName}
+                                                onChange={(e) => setFullName(e.target.value)}
+                                                className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300"
+                                                placeholder="如何称呼您"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {mode !== 'login' && (
+                                    <div className="space-y-1.5 group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1 block transition-colors group-focus-within:text-primary">验证码</label>
+                                        <div className="flex space-x-3">
+                                            <div className="relative flex-1">
+                                                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors group-focus-within:text-primary" />
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={otpCode}
+                                                    onChange={(e) => setOtpCode(e.target.value)}
+                                                    className="w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300"
+                                                    placeholder="输入验证码"
+                                                    maxLength={6}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={countdown > 0}
+                                                onClick={handleSendOTP}
+                                                className="px-4 py-3.5 text-xs font-bold bg-[#134E4A]/5 text-[#134E4A] border border-[#134E4A]/10 rounded-lg hover:bg-[#134E4A]/10 transition-all whitespace-nowrap disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed group"
+                                            >
+                                                {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-1.5 group">
+                                    <div className="flex justify-between items-center pl-1">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block transition-colors group-focus-within:text-primary">
+                                            {mode === 'login' ? '密码' : '设置登录密码'}
+                                        </label>
+                                        {mode === 'login' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setMode('forgot')}
+                                                className="text-xs text-[#134E4A] font-bold hover:underline cursor-pointer"
+                                            >
+                                                忘记密码？
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors group-focus-within:text-primary" />
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            required
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            className="w-full pl-12 pr-12 py-3.5 bg-gray-50/50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300"
+                                            placeholder={mode === 'login' ? "输入密码" : "至少6位字符"}
+                                            minLength={mode === 'login' ? 1 : 6}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                        >
+                                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SUBMIT BUTTON */}
+                            <div className="pt-10">
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-xl flex items-center justify-center space-x-3 cursor-pointer disabled:cursor-not-allowed relative overflow-hidden group/btn ${mode === 'login' ? 'bg-[#134E4A] text-white hover:bg-[#0F3D3A] shadow-[#134E4A]/20' : 'bg-[#1a3a3a] text-white hover:bg-[#1a3a3a]/90 shadow-[#1a3a3a]/20'
+                                        }`}
+                                >
+                                    {/* Button Subtle Gradient */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity pointer-events-none" />
+
+                                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (mode === 'login' ? <LogIn className="w-6 h-6" /> : <UserPlus className="w-6 h-6" />)}
+                                    <span className="relative z-10">
+                                        {mode === 'login' ? '立即登录' : mode === 'register' ? '立即注册' : '重置并登录'}
+                                    </span>
+                                </button>
+                            </div>
+                        </form>
+
+                        <div className="mt-10 text-center pt-6 border-t border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMode(mode === 'login' ? 'register' : 'login');
+                                    setError(null);
+                                }}
+                                className="text-sm text-gray-500 hover:text-primary transition-all cursor-pointer w-full"
+                            >
+                                {mode === 'login' ? '没有账户？点击注册' : '已有账户？点击登录'}
+                            </button>
                         </div>
-
-                        {/* SUBMIT BUTTON */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className={`w-full py-4 rounded-xl font-bold text-lg transition shadow-md flex items-center justify-center space-x-2 cursor-pointer disabled:cursor-not-allowed ${mode === 'login' ? 'bg-primary text-white hover:bg-primary-hover' : 'bg-[#1a3a3a] text-white hover:bg-[#1a3a3a]/90'
-                                }`}
-                        >
-                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (mode === 'login' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />)}
-                            <span>
-                                {mode === 'login' ? '立即登录' : mode === 'register' ? '立即注册' : '重置并登录'}
-                            </span>
-                        </button>
-                    </form>
-                </div>
-
-                <div className="mt-8 text-center pt-6 border-t border-gray-100">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setMode(mode === 'login' ? 'register' : 'login');
-                            setError(null);
-                        }}
-                        className="text-sm font-medium text-gray-500 hover:text-primary transition-colors cursor-pointer"
-                    >
-                        {mode === 'login' ? '没有账户？点击注册' : '已有账户？点击登录'}
-                    </button>
+                    </div>
                 </div>
             </motion.div>
         </div>
+
     );
 }

@@ -53,8 +53,8 @@ export default function HomeView({
       id: 'upgrade',
       title: premiumStatus ? '尊享会员' : '立即升级',
       desc: premiumStatus
-        ? `尊敬的尊享会员，您已购 ${purchasedBooksCount} 本精装传记`
-        : '升级为尊享版开启记录之旅',
+        ? `尊敬的尊享会员，您已定制 ${purchasedBooksCount} 本精装传记`
+        : '升级为尊享版定制精装传记 ',
       icon: premiumStatus ? Star : Heart,
       color: premiumStatus ? 'text-amber-700' : 'text-amber-600',
       bg: premiumStatus ? 'bg-amber-100' : 'bg-amber-50',

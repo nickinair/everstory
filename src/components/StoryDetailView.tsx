@@ -1,9 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, X, MoreHorizontal, Heart, Share2, Plus, Edit3, Play, Maximize2, Volume2, AlertCircle, Save, Download, RefreshCw, Sparkles, Check, Trash2, Copy, CheckCheck } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Edit3,
+  Save,
+  X,
+  Mic,
+  Square,
+  Play,
+  Pause,
+  RefreshCw,
+  ChevronLeft,
+  Image as ImageIcon,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Wand2,
+  ArrowLeft,
+  Share2,
+  Sparkles,
+  Volume2,
+  History,
+  FileText,
+  Star,
+  Users,
+  MoreHorizontal,
+  Heart,
+  Maximize2,
+  Download,
+  Check,
+  Copy,
+  CheckCheck
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Story } from '../types';
+import { Story, Prompt, ProjectMember } from '../types';
 import { databaseService } from '../services/databaseService';
 import { transcribeMedia, optimizeStoryContent } from '../services/geminiService';
+import BookLoader from './BookLoader';
 
 interface StoryDetailViewProps {
   story: Story;
@@ -502,73 +535,75 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
             )}
 
             {/* Media Controls Overlay */}
-            <div className="absolute inset-0 flex flex-col justify-end p-4 lg:p-6 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="flex items-center space-x-4 mb-2 lg:mb-4">
-                <div
-                  className="flex-1 h-1.5 bg-white/30 rounded-full overflow-hidden cursor-pointer group/progress"
-                  onClick={handleSeek}
-                >
+            {story.type !== 'image' && (
+              <div className="absolute inset-0 flex flex-col justify-end p-4 lg:p-6 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center space-x-4 mb-2 lg:mb-4">
                   <div
-                    className="h-full bg-white relative"
-                    style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                    className="flex-1 h-1.5 bg-white/30 rounded-full overflow-hidden cursor-pointer group/progress"
+                    onClick={handleSeek}
                   >
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover/progress:scale-100 transition-transform" />
-                  </div>
-                </div>
-                <span className="text-white text-[10px] lg:text-xs font-mono">
-                  {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 lg:space-x-6">
-                  <button
-                    onClick={togglePlay}
-                    className="text-white hover:scale-110 transition-transform cursor-pointer"
-                  >
-                    {isPlaying ? (
-                      <div className="w-5 h-5 lg:w-6 lg:h-6 flex items-center justify-center space-x-1">
-                        <div className="w-1.5 h-full bg-current rounded-full" />
-                        <div className="w-1.5 h-full bg-current rounded-full" />
-                      </div>
-                    ) : (
-                      <Play className="w-5 h-5 lg:w-6 lg:h-6 fill-current" />
-                    )}
-                  </button>
-                  <button className="text-white hover:scale-110 transition-transform cursor-pointer">
-                    <Volume2 className="w-5 h-5 lg:w-6 lg:h-6" />
-                  </button>
-
-                  <div className="flex items-center space-x-3 border-l border-white/20 pl-4 lg:pl-6">
-                    {currentUserRole === 'storyteller' && (
-                      <button className="text-white/80 hover:text-white flex items-center space-x-1 transition-colors group cursor-pointer">
-                        <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">重新录制</span>
-                      </button>
-                    )}
-                    <a
-                      href={story.videoUrl || story.imageUrl}
-                      download
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-white/80 hover:text-white flex items-center space-x-1 transition-colors group cursor-pointer"
+                    <div
+                      className="h-full bg-white relative"
+                      style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
                     >
-                      <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">下载</span>
-                    </a>
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full scale-0 group-hover/progress:scale-100 transition-transform" />
+                    </div>
+                  </div>
+                  <span className="text-white text-[10px] lg:text-xs font-mono">
+                    {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4 lg:space-x-6">
+                    <button
+                      onClick={togglePlay}
+                      className="text-white hover:scale-110 transition-transform cursor-pointer"
+                    >
+                      {isPlaying ? (
+                        <div className="w-5 h-5 lg:w-6 lg:h-6 flex items-center justify-center space-x-1">
+                          <div className="w-1.5 h-full bg-current rounded-full" />
+                          <div className="w-1.5 h-full bg-current rounded-full" />
+                        </div>
+                      ) : (
+                        <Play className="w-5 h-5 lg:w-6 lg:h-6 fill-current" />
+                      )}
+                    </button>
+                    <button className="text-white hover:scale-110 transition-transform cursor-pointer">
+                      <Volume2 className="w-5 h-5 lg:w-6 lg:h-6" />
+                    </button>
+
+                    <div className="flex items-center space-x-3 border-l border-white/20 pl-4 lg:pl-6">
+                      {currentUserRole === 'storyteller' && (
+                        <button className="text-white/80 hover:text-white flex items-center space-x-1 transition-colors group cursor-pointer">
+                          <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">重新录制</span>
+                        </button>
+                      )}
+                      <a
+                        href={story.videoUrl || story.imageUrl}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white/80 hover:text-white flex items-center space-x-1 transition-colors group cursor-pointer"
+                      >
+                        <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">下载</span>
+                      </a>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4 lg:space-x-6">
+                    <span className="text-white text-[10px] lg:text-xs font-medium tracking-tight truncate max-w-[100px] lg:max-w-none">• {story.title}</span>
+                    <button className="text-white hover:scale-110 transition-transform cursor-pointer">
+                      <Maximize2 className="w-4 h-4 lg:w-5 lg:h-5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-4 lg:space-x-6">
-                  <span className="text-white text-[10px] lg:text-xs font-medium tracking-tight truncate max-w-[100px] lg:max-w-none">• {story.title}</span>
-                  <button className="text-white hover:scale-110 transition-transform cursor-pointer">
-                    <Maximize2 className="w-4 h-4 lg:w-5 lg:h-5" />
-                  </button>
-                </div>
               </div>
-            </div>
+            )}
 
-            {/* Play Button Center (only show if not playing) */}
+            {/* Play Button Center (only show if not playing and NOT an image) */}
             <AnimatePresence>
-              {!isPlaying && (
+              {!isPlaying && story.type !== 'image' && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -766,34 +801,11 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                 ) : (
                   <>
                     {isTranscribing ? (
-                      <div className="py-12 flex flex-col items-center justify-center space-y-6 bg-accent/5 rounded-3xl border border-dashed border-accent/20">
-                        <div className="relative">
-                          <motion.div
-                            animate={{
-                              scale: [1, 1.1, 1],
-                              opacity: [0.3, 0.6, 0.3]
-                            }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                            className="absolute inset-0 bg-accent rounded-full scale-150 blur-xl"
-                          />
-                          <div className="relative bg-white p-4 rounded-2xl shadow-sm">
-                            <RefreshCw className="w-8 h-8 text-accent animate-spin" />
-                          </div>
-                        </div>
-                        <div className="text-center space-y-2">
+                      <div className="py-12 flex flex-col items-center justify-center bg-accent/5 rounded-3xl border border-dashed border-accent/20">
+                        <BookLoader />
+                        <div className="text-center space-y-2 mt-8">
                           <h3 className="text-lg font-bold text-gray-800">AI 正在为您转换语音...</h3>
                           <p className="text-sm text-gray-400 px-8">完成后文字将自动显示在这里</p>
-                        </div>
-
-                        <div className="flex space-x-1.5 items-center">
-                          {[...Array(3)].map((_, i) => (
-                            <motion.div
-                              key={i}
-                              animate={{ y: [0, -6, 0] }}
-                              transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
-                              className="w-1.5 h-1.5 bg-accent rounded-full"
-                            />
-                          ))}
                         </div>
                       </div>
                     ) : (

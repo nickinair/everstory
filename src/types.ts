@@ -28,7 +28,7 @@ export interface Story {
   imageUrl: string;
   videoUrl?: string;
   additionalImages?: string[];
-  type: 'video' | 'audio';
+  type: 'video' | 'audio' | 'image';
   date: string;
   pages?: number;
   metadata?: Record<string, any>;

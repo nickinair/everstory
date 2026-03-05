@@ -242,6 +242,113 @@ app.post('/api/sms/send-invite', async (req, res) => {
   }
 });
 
+// Custom Email OTP functionality (Bypasses Supabase default email change flow)
+app.post('/api/email/send-otp', async (req, res) => {
+  const { email } = req.body;
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: '无效的电子邮箱' });
+  }
+
+  try {
+    // 1. Generate 8-digit OTP
+    const code = Math.floor(10000000 + Math.random() * 90000000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
+
+    // 2. Save to database
+    const { error: dbError } = await supabase.from('email_otps').insert({
+      email,
+      code,
+      expires_at: expiresAt
+    });
+
+    if (dbError) {
+      console.error('Error saving email OTP:', dbError);
+      return res.status(500).json({ error: '验证码生成失败' });
+    }
+
+    // 3. Send email using nodemailer
+    const mailOptions = {
+      from: `"长生记 Everstory" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: '[长生记] 账号安全验证',
+      html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background-color: #f8f5f0;">
+            <div style="background-color: #1a3a3a; padding: 32px 24px; text-align: center; border-radius: 12px 12px 0 0;">
+              <h1 style="color: #BEF264; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 2px;">长生記</h1>
+            </div>
+            <div style="background: white; padding: 32px 24px; border-left: 1px solid #eee; border-right: 1px solid #eee;">
+              <p style="font-size: 16px; color: #333; margin: 0 0 16px;">您好！</p>
+              <p style="font-size: 16px; color: #333; margin: 0 0 16px;">
+                您正在进行账号安全操作（更换关联邮箱）。您的验证码为：
+              </p>
+              <div style="text-align: center; margin: 32px 0;">
+                <span style="display: inline-block; background-color: #f3f4f6; color: #1f2937; padding: 14px 36px; border-radius: 8px; font-weight: bold; font-size: 32px; letter-spacing: 4px;">
+                  ${code}
+                </span>
+              </div>
+              <p style="font-size: 13px; color: #666; margin: 24px 0 0; line-height: 1.5;">
+                验证码在 5 分钟内有效。如非本人操作，请忽略此邮件。
+              </p>
+            </div>
+          </div>
+        `
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: '验证码已发送' });
+  } catch (error) {
+    console.error('Email Send Error:', error);
+    res.status(500).json({ error: '发送失败' });
+  }
+});
+
+app.post('/api/auth/update-email', async (req, res) => {
+  const { userId, newEmail, code } = req.body;
+  if (!userId || !newEmail || !code) {
+    return res.status(400).json({ error: '参数缺失' });
+  }
+
+  try {
+    // 1. Verify OTP
+    const { data: otpData, error: otpError } = await supabase
+      .from('email_otps')
+      .select('*')
+      .eq('email', newEmail)
+      .eq('code', code)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (otpError || !otpData) {
+      return res.status(400).json({ error: '验证码无效或已过期' });
+    }
+
+    // 2. Forcefully Update User Email via Admin API
+    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+      email: newEmail,
+      email_confirm: true // Force confirm
+    });
+
+    if (updateError) {
+      if (updateError.message.includes('already registered') || updateError.message.includes('email is taken')) {
+        return res.status(400).json({ error: '该邮箱已被其他账号使用' });
+      }
+      throw updateError;
+    }
+
+    // 3. Update Profile (if necessary, though we usually just use auth.users)
+    // (Assuming you want to track email in profiles too, if not, skip this step)
+
+    // 4. Mark OTP as used
+    await supabase.from('email_otps').update({ used: true }).eq('id', otpData.id);
+
+    res.json({ success: true, message: '邮箱更新成功' });
+  } catch (error) {
+    console.error('Update Email Error:', error);
+    res.status(500).json({ error: '更新失败: ' + (error.message || '服务器错误') });
+  }
+});
+
 // Register user via Phone (using SMS verification)
 app.post('/api/auth/register-phone', async (req, res) => {
   const { phone, password, fullName, code } = req.body;
@@ -267,7 +374,7 @@ app.post('/api/auth/register-phone', async (req, res) => {
     // 2. Prepare shadow email and formatted phone
     const cleanPhone = phone.replace(/\D/g, '');
     const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
-    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.cc`;
+    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
 
     // 3. Create user using service role
     const { data: userData, error: createError } = await supabase.auth.admin.createUser({
@@ -310,6 +417,73 @@ app.post('/api/auth/register-phone', async (req, res) => {
   } catch (error) {
     console.error('Registration Error:', error);
     res.status(500).json({ error: '注册失败: ' + (error.message || '服务器错误') });
+  }
+});
+
+// Update User Phone
+app.post('/api/auth/update-phone', async (req, res) => {
+  const { userId, newPhone, code } = req.body;
+  if (!userId || !newPhone || !code) {
+    return res.status(400).json({ error: '字段缺失' });
+  }
+
+  try {
+    // 1. Verify OTP first
+    const { data: otpData, error: otpError } = await supabase
+      .from('sms_otps')
+      .select('*')
+      .eq('phone', newPhone)
+      .eq('code', code)
+      .eq('used', false)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+
+    if (otpError || !otpData) {
+      return res.status(400).json({ error: '验证码无效或已过期' });
+    }
+
+    // 2. Prepare shadow email and formatted phone
+    const cleanPhone = newPhone.replace(/\D/g, '');
+    const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
+    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
+
+    // 3. Get current user to check if they have a real email
+    const { data: user, error: getError } = await supabase.auth.admin.getUserById(userId);
+    if (getError || !user) throw new Error('用户不存在');
+
+    const updateData = {
+      phone: formattedPhone,
+      email_confirm: true,
+      phone_confirm: true,
+      user_metadata: {
+        ...user.user.user_metadata,
+        phone: formattedPhone
+      }
+    };
+
+    // ONLY update email if the current one is a shadow email or missing
+    if (!user.user.email || user.user.email.endsWith('@users.everstory.ai') || user.user.email.endsWith('@users.everstory.cc')) {
+      updateData.email = shadowEmail;
+    }
+
+    // 4. Update Auth User via Admin API
+    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, updateData);
+
+    if (updateError) throw updateError;
+
+    // 4. Update Profile
+    await supabase.from('profiles').update({
+      phone: formattedPhone,
+      updated_at: new Date().toISOString()
+    }).eq('id', userId);
+
+    // 5. Mark OTP as used
+    await supabase.from('sms_otps').update({ used: true }).eq('id', otpData.id);
+
+    res.json({ success: true, message: '更新成功' });
+  } catch (error) {
+    console.error('Update Phone Error:', error);
+    res.status(500).json({ error: '更新失败: ' + (error.message || '服务器错误') });
   }
 });
 
