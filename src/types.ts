@@ -71,6 +71,7 @@ export interface Order {
     time: string;
     description: string;
   }[];
+  created_at?: string;
 }
 
 export interface ProjectMember extends User {
@@ -87,4 +88,4 @@ export interface Project {
   createdAt: string;
 }
 
-export type ViewType = 'home' | 'stories' | 'prompts' | 'order' | 'settings' | 'account' | 'story-detail' | 'order-detail' | 'add-story' | 'project-detail' | 'recording' | 'buy-now' | 'redemption';
+export type ViewType = 'home' | 'stories' | 'prompts' | 'order' | 'settings' | 'account' | 'story-detail' | 'order-detail' | 'add-story' | 'project-detail' | 'recording' | 'buy-now' | 'redemption' | 'membership' | 'upgrade-payment';

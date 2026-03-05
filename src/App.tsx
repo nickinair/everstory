@@ -54,6 +54,7 @@ import UpgradeModal from './components/UpgradeModal';
 import JoinConfirmationModal from './components/JoinConfirmationModal';
 import RedemptionView from './components/RedemptionView';
 import MembershipManagementView from './components/MembershipManagementView';
+import UpgradePaymentView from './components/UpgradePaymentView';
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
@@ -780,8 +781,19 @@ export default function App() {
                 orders={orders}
                 onBack={() => setCurrentView('account')}
                 onRenew={() => {
-                  setIsOrdering(true);
-                  setCurrentView('order');
+                  setCurrentView('upgrade-payment');
+                }}
+              />
+            )}
+            {currentView === 'upgrade-payment' && currentProjectId && (
+              <UpgradePaymentView
+                currentUser={currentUser}
+                projectId={currentProjectId}
+                onBack={() => setCurrentView('membership')}
+                onSuccess={() => {
+                  fetchUserData(session.user.id);
+                  if (currentProjectId) fetchProjectData(currentProjectId);
+                  setCurrentView('membership');
                 }}
               />
             )}

@@ -8,9 +8,10 @@ import { databaseService } from '../services/databaseService';
 
 interface AccountSettingsViewProps {
   currentUser: UserType | null;
+  onNavigate?: (view: string) => void;
 }
 
-export default function AccountSettingsView({ currentUser }: AccountSettingsViewProps) {
+export default function AccountSettingsView({ currentUser, onNavigate }: AccountSettingsViewProps) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
@@ -149,7 +150,12 @@ export default function AccountSettingsView({ currentUser }: AccountSettingsView
               {section.items.map((item, iIdx) => (
                 <button
                   key={item.label}
-                  className={`w-full flex items-center p-4 hover:bg-gray-50 transition text-left cursor-pointer ${iIdx !== section.items.length - 1 ? 'border-b border-gray-50' : ''
+                  onClick={() => {
+                    if (item.label === '订阅计划' && onNavigate) {
+                      onNavigate('membership');
+                    }
+                  }}
+                  className={`w-full flex items-center p-4 hover:bg-gray-50 transition text-left cursor-pointer border-l-2 border-transparent focus:outline-none focus:border-primary active:bg-gray-100 ${iIdx !== section.items.length - 1 ? 'border-b border-gray-50' : ''
                     }`}
                 >
                   <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-500 mr-4">
