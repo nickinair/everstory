@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAvatarUrl } from '../lib/avatar';
-import { User, Mail, Phone, Lock, LogOut, ChevronRight, Bell, Shield, CreditCard, HelpCircle, Edit2 } from 'lucide-react';
+import { User, Mail, Phone, Lock, LogOut, ChevronRight, Bell, Shield, CreditCard, HelpCircle, Edit2, Star } from 'lucide-react';
 import { User as UserType } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { databaseService } from '../services/databaseService';
@@ -169,6 +169,15 @@ export default function AccountSettingsView({ currentUser, onNavigate }: Account
                       <p className="text-xs text-gray-500 mt-0.5">{item.value}</p>
                     )}
                   </div>
+                  {item.label === '订阅计划' && (
+                    <div className={`mr-1 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center shadow-sm ${currentUser?.is_premium
+                        ? 'bg-amber-100 text-amber-600 border border-amber-200'
+                        : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                      }`}>
+                      {currentUser?.is_premium && <Star className="w-2.5 h-2.5 mr-1 fill-amber-600" />}
+                      {currentUser?.is_premium ? '尊享版' : '基础版'}
+                    </div>
+                  )}
                   <ChevronRight className="w-5 h-5 text-gray-300" />
                 </button>
               ))}
