@@ -16,7 +16,9 @@ export const getAvatarUrl = (user: User | null | undefined): string => {
     }
 
     // Fallback to random cartoon avatar
-    // Using adventurer style which looks like cartoon characters
-    const seed = user?.id || user?.full_name || user?.name || 'guest-' + Math.random().toString(36).substring(7);
+    // Use a stable seed based on user info to ensure the same avatar is shown everywhere.
+    // If no ID is available, we use a fallback string but NEVER Math.random() to avoid flickering/inconsistency.
+    const seed = user?.id || user?.phone || user?.email || user?.full_name || user?.name || 'everstory-stable-guest';
+
     return `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(seed)}`;
 };

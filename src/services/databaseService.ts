@@ -60,6 +60,7 @@ export const databaseService = {
                 initials: (m.user?.full_name || m.user?.phone || '未').substring(0, 1),
                 avatar: m.user?.avatar_url || m.user?.avatar,
                 phone: m.user?.phone,
+                user: m.user,
                 ...m.user
             }))
         })) as Project[];
