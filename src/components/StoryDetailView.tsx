@@ -558,49 +558,49 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
             )}
           </div>
 
-          <div className="p-2 lg:p-6 border-t border-gray-100 grid grid-cols-4 gap-2 shrink-0 bg-gray-50/50">
+          <div className="p-4 lg:p-8 border-t border-gray-100 grid grid-cols-4 gap-3 shrink-0 bg-gray-50/50">
             {isEditing ? (
               <>
                 <div className="col-span-2" />
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="flex flex-col items-center justify-center p-1.5 lg:p-2 border border-gray-200 text-gray-500 rounded-xl hover:bg-white transition-all cursor-pointer"
+                  className="flex flex-col items-center justify-center p-2 lg:p-3 border border-gray-200 text-gray-500 rounded-xl hover:bg-white transition-all cursor-pointer"
                 >
-                  <X className="w-4 h-4 lg:w-5 lg:h-5 mb-0.5 lg:mb-1" />
-                  <span className="text-[9px] lg:text-[10px] font-bold uppercase tracking-wider">取消</span>
+                  <X className="w-5 h-5 lg:w-6 lg:h-6 mb-1 lg:mb-1.5" />
+                  <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wider">取消</span>
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex flex-col items-center justify-center p-1.5 lg:p-2 bg-accent text-white rounded-xl shadow-md hover:bg-teal-700 transition-all group cursor-pointer"
+                  className="flex flex-col items-center justify-center p-2 lg:p-3 bg-accent text-white rounded-xl shadow-md hover:bg-teal-700 transition-all group cursor-pointer"
                 >
-                  <Save className="w-4 h-4 lg:w-5 lg:h-5 mb-0.5 lg:mb-1" />
-                  <span className="text-[9px] lg:text-[10px] font-bold uppercase tracking-wider">保存</span>
+                  <Save className="w-5 h-5 lg:w-6 lg:h-6 mb-1 lg:mb-1.5" />
+                  <span className="text-[11px] lg:text-[12px] font-bold uppercase tracking-wider">保存</span>
                 </button>
               </>
             ) : (
               <>
-                <button className="flex flex-col items-center justify-center p-1.5 lg:p-2 hover:bg-white rounded-xl transition-all group cursor-pointer">
-                  <Heart className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 group-hover:text-red-500 mb-0.5 lg:mb-1" />
-                  <span className="text-[9px] lg:text-[10px] font-bold text-gray-500 uppercase tracking-wider">互动</span>
+                <button className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group cursor-pointer">
+                  <Heart className="w-5 h-5 lg:w-6 lg:h-6 text-gray-400 group-hover:text-red-500 mb-1 lg:mb-1.5" />
+                  <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">互动</span>
                 </button>
                 <button
                   onClick={() => setIsShareModalOpen(true)}
-                  className="flex flex-col items-center justify-center p-1.5 lg:p-2 hover:bg-white rounded-xl transition-all group cursor-pointer"
+                  className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group cursor-pointer"
                 >
-                  <Share2 className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 group-hover:text-primary mb-0.5 lg:mb-1" />
-                  <span className="text-[9px] lg:text-[10px] font-bold text-gray-500 uppercase tracking-wider">分享</span>
+                  <Share2 className="w-5 h-5 lg:w-6 lg:h-6 text-gray-400 group-hover:text-primary mb-1 lg:mb-1.5" />
+                  <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">分享</span>
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingPhoto}
-                  className="flex flex-col items-center justify-center p-1.5 lg:p-2 hover:bg-white rounded-xl transition-all group disabled:opacity-50 cursor-pointer"
+                  className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group disabled:opacity-50 cursor-pointer"
                 >
                   {isUploadingPhoto ? (
-                    <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5 text-accent animate-spin mb-0.5 lg:mb-1" />
+                    <RefreshCw className="w-5 h-5 lg:w-6 lg:h-6 text-accent animate-spin mb-1 lg:mb-1.5" />
                   ) : (
-                    <Plus className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400 group-hover:text-primary mb-0.5 lg:mb-1" />
+                    <Plus className="w-5 h-5 lg:w-6 lg:h-6 text-gray-400 group-hover:text-primary mb-1 lg:mb-1.5" />
                   )}
-                  <span className="text-[9px] lg:text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">
                     {isUploadingPhoto ? '上传中' : '相册'}
                   </span>
                 </button>
@@ -612,10 +612,10 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                       setAssistantStep('settings');
                     }
                   }}
-                  className={`flex flex-col items-center justify-center p-1.5 lg:p-2 rounded-xl transition-all group cursor-pointer ${isEditing ? 'bg-accent/10 text-accent' : 'hover:bg-white text-gray-400'}`}
+                  className={`flex flex-col items-center justify-center p-2 lg:p-3 rounded-xl transition-all group cursor-pointer ${isEditing ? 'bg-accent/10 text-accent' : 'hover:bg-white text-gray-400'}`}
                 >
-                  <Sparkles className={`w-4 h-4 lg:w-5 lg:h-5 mb-0.5 lg:mb-1 ${isEditing ? 'text-accent' : 'group-hover:text-primary'}`} />
-                  <span className={`text-[9px] lg:text-[10px] font-bold uppercase tracking-wider ${isEditing ? 'text-accent' : 'text-gray-500'}`}>
+                  <Sparkles className={`w-5 h-5 lg:w-6 lg:h-6 mb-1 lg:mb-1.5 ${isEditing ? 'text-accent' : 'group-hover:text-primary'}`} />
+                  <span className={`text-[11px] lg:text-[12px] font-bold uppercase tracking-wider ${isEditing ? 'text-accent' : 'text-gray-500'}`}>
                     编辑
                   </span>
                 </button>

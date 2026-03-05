@@ -211,7 +211,7 @@ export default function AuthView() {
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex bg-white rounded-[2rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] border border-white/50 w-full max-w-[440px] md:max-w-[480px] overflow-hidden min-h-[600px]"
+                className="flex bg-white rounded-[2rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)] border border-white/50 w-full max-w-[440px] md:max-w-[480px] overflow-hidden min-h-[600px] -mt-8 md:-mt-24"
             >
                 {/* Notebook Spine */}
                 <div className="w-12 md:w-14 bg-[#134E4A] flex flex-col items-center justify-center relative shadow-[inset_-8px_0_20px_rgba(0,0,0,0.25)]">
@@ -258,7 +258,7 @@ export default function AuthView() {
                         <div className="text-center mb-10">
                             <h1 className="text-4xl font-serif text-gray-800 mb-2 font-light tracking-[0.3em] pl-[0.3em]">长生記</h1>
                             <p className="text-[14px] text-gray-400 tracking-[0.1em] uppercase">
-                                让每一代人的故事永存
+                                时光会老 记忆永存
                             </p>
                         </div>
 
