@@ -112,20 +112,24 @@ export default function MembershipManagementView({
                     {/* Arrow / Connection */}
                     <div className="hidden md:flex flex-col items-center justify-center space-y-2 text-amber-500 z-10">
                         <motion.div
+                            initial={{ opacity: 0, scale: 0.5 }}
                             animate={{
-                                y: [0, -5, 0],
-                                scale: [1, 1.1, 1]
+                                opacity: 1,
+                                scale: 1,
+                                y: [0, -8, 0],
                             }}
                             transition={{
-                                duration: 2,
-                                repeat: Infinity,
-                                ease: "easeInOut"
+                                y: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                                opacity: { duration: 0.5 }
                             }}
-                            className="bg-amber-50 p-2 rounded-full border border-amber-100 shadow-sm"
+                            className="relative"
                         >
-                            <ArrowRight className="w-6 h-6" />
+                            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10 30C15 30 25 25 30 15" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="4 4" />
+                                <path d="M25 15H30V20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                         </motion.div>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60">Upgrade</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60 bg-white/50 px-2 py-0.5 rounded-full backdrop-blur-sm shadow-sm border border-amber-50">Upgrade</span>
                     </div>
 
                     <div className="md:hidden py-2 text-amber-500">
