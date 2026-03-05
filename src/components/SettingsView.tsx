@@ -103,7 +103,7 @@ export default function SettingsView({ projects, currentUser, onProjectClick, on
                   </div>
                   <p className="text-xs text-gray-500 mt-2 flex items-center">
                     <Users className="w-3 h-3 mr-1" />
-                    {project.members.length + 1} 位成员 • 创建于 {project.createdAt}
+                    {project.members.length} 位成员 • 创建于 {project.createdAt}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -153,7 +153,7 @@ export default function SettingsView({ projects, currentUser, onProjectClick, on
                   <p className="text-sm font-bold text-gray-800">{project.name}</p>
                   <p className="text-xs text-gray-500 mt-2 flex items-center">
                     <Users className="w-3 h-3 mr-1" />
-                    {project.members.length + 1} 位成员 • 创建于 {project.createdAt}
+                    {project.members.length} 位成员 • 创建于 {project.createdAt}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
