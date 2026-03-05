@@ -272,8 +272,10 @@ app.post('/api/auth/register-phone', async (req, res) => {
     // 3. Create user using service role
     const { data: userData, error: createError } = await supabase.auth.admin.createUser({
       email: shadowEmail,
+      phone: formattedPhone,
       password: password,
       email_confirm: true,
+      phone_confirm: true,
       user_metadata: {
         full_name: fullName,
         phone: formattedPhone
