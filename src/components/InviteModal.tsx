@@ -14,7 +14,6 @@ interface InviteModalProps {
 }
 
 export default function InviteModal({ isOpen, onClose, projectId, members, onMembersUpdate }: InviteModalProps) {
-    const [invitePhone, setInvitePhone] = useState('');
     const [inviteEmail, setInviteEmail] = useState('');
     const [showEmailInput, setShowEmailInput] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
@@ -33,43 +32,6 @@ export default function InviteModal({ isOpen, onClose, projectId, members, onMem
             setInvitations(data);
         } catch (error) {
             console.error('Error loading invitations:', error);
-        }
-    };
-
-    const handleInvite = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!invitePhone) return;
-        try {
-            // Get current user and project info for the invitation
-            const { data: { user } } = await databaseService.getSession() as any;
-            const projects = await databaseService.getProjects();
-            const currentProject = projects.find((p: any) => p.id === projectId);
-
-            const response = await fetch('/api/sms/send-invite', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    phone: invitePhone,
-                    inviterName: user?.user_metadata?.full_name || '您的好友',
-                    projectName: currentProject?.name || '新项目',
-                    projectId: projectId
-                })
-            });
-
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result.error || '发送失败');
-            }
-
-            // Also record the invitation in the database
-            await databaseService.sendInvitation(projectId, invitePhone);
-
-            alert(`已通过短信向手机号 ${invitePhone} 发送项目邀请`);
-            setInvitePhone('');
-            loadInvitations();
-        } catch (error: any) {
-            console.error('Error sending invitation:', error);
-            alert('发送邀请失败: ' + (error.message || '请稍后重试'));
         }
     };
 
@@ -128,28 +90,6 @@ export default function InviteModal({ isOpen, onClose, projectId, members, onMem
                         </p>
 
                         <div className="space-y-6">
-                            <div className="space-y-2">
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">通过手机号邀请</label>
-                                <form onSubmit={handleInvite} className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <input
-                                            type="tel"
-                                            value={invitePhone}
-                                            onChange={(e) => setInvitePhone(e.target.value)}
-                                            placeholder="输入手机号"
-                                            className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none transition-all text-sm"
-                                            required
-                                        />
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-all active:scale-95 cursor-pointer text-sm"
-                                    >
-                                        邀请
-                                    </button>
-                                </form>
-                            </div>
-
                             <div className="space-y-4 pt-4 border-t border-gray-100">
                                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">项目成员</h4>
                                 <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
