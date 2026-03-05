@@ -171,11 +171,11 @@ export default function AccountSettingsView({ currentUser, onNavigate }: Account
                   </div>
                   {item.label === '订阅计划' && (
                     <div className={`mr-1 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center shadow-sm ${currentUser?.is_premium
-                        ? 'bg-amber-100 text-amber-600 border border-amber-200'
-                        : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                      ? 'bg-amber-100 text-amber-600 border border-amber-200'
+                      : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                       }`}>
                       {currentUser?.is_premium && <Star className="w-2.5 h-2.5 mr-1 fill-amber-600" />}
-                      {currentUser?.is_premium ? '尊享版' : '基础版'}
+                      {currentUser?.is_premium ? '尊享版' : '免费版'}
                     </div>
                   )}
                   <ChevronRight className="w-5 h-5 text-gray-300" />

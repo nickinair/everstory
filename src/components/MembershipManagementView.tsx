@@ -70,82 +70,164 @@ export default function MembershipManagementView({
                 <div className="w-20" /> {/* Spacer for centering */}
             </div>
 
-            {/* Membership Card */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`relative overflow-hidden rounded-3xl p-8 mb-8 shadow-xl transition-all ${isPremium
-                    ? 'bg-gradient-to-br from-amber-200 via-amber-400 to-amber-500 text-amber-950 ring-1 ring-amber-400/50'
-                    : 'bg-gradient-to-br from-teal-500 to-teal-600 text-white shadow-teal-900/10'
-                    }`}
-            >
-                <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-xl scale-110 shadow-sm ${isPremium ? 'bg-white/40 text-amber-900' : 'bg-white/20 text-white'}`}>
-                                <Star className="w-6 h-6 fill-current" />
+            {/* Membership Comparison or Card */}
+            {!isPremium ? (
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-12 relative">
+                    {/* Free Plan Box */}
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="w-full md:w-[45%] bg-white rounded-3xl p-6 border-2 border-gray-100 shadow-sm relative overflow-hidden group hover:border-teal-500/20 transition-colors"
+                    >
+                        <div className="relative z-10">
+                            <div className="flex items-center space-x-3 mb-6">
+                                <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
+                                    <Star className="w-5 h-5 fill-current" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-800">免费版</h2>
+                                    <p className="text-gray-400 text-xs">当前版本</p>
+                                </div>
                             </div>
-                            <div>
-                                <h2 className="text-2xl font-bold tracking-tight">
-                                    {isPremium ? '尊享会员 · 已激活' : '免费版用户'}
-                                </h2>
-                                <p className={`${isPremium ? 'text-amber-800' : 'text-white/70'} text-sm mt-1`}>
-                                    {isPremium ? '感谢您支持长生记 Everstory' : '升级以解锁更多专业功能'}
-                                </p>
+                            <div className="space-y-4 pt-4 border-t border-gray-50">
+                                <div className="flex items-center space-x-3 text-gray-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                                    <span className="text-sm">2 个故事录制上限</span>
+                                </div>
+                                <div className="flex items-center space-x-3 text-gray-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                                    <span className="text-sm">基础 AI 辅助体验</span>
+                                </div>
+                                <div className="flex items-center space-x-3 text-gray-400 opacity-50">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                    <span className="text-sm line-through">精装纸质纪念册</span>
+                                </div>
                             </div>
                         </div>
-                        {isPremium && (
+                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <Star className="w-24 h-24 text-teal-600 rotate-12" />
+                        </div>
+                    </motion.div>
+
+                    {/* Arrow / Connection */}
+                    <div className="hidden md:flex flex-col items-center justify-center space-y-2 text-amber-500 z-10">
+                        <motion.div
+                            animate={{
+                                y: [0, -5, 0],
+                                scale: [1, 1.1, 1]
+                            }}
+                            transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                            className="bg-amber-50 p-2 rounded-full border border-amber-100 shadow-sm"
+                        >
+                            <ArrowRight className="w-6 h-6" />
+                        </motion.div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600/60">Upgrade</span>
+                    </div>
+
+                    <div className="md:hidden py-2 text-amber-500">
+                        <ArrowRight className="w-6 h-6 rotate-90" />
+                    </div>
+
+                    {/* Premium Plan Box */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="w-full md:w-[45%] bg-gradient-to-br from-amber-400 to-amber-600 rounded-3xl p-6 text-white shadow-xl shadow-amber-200 relative overflow-hidden group cursor-pointer"
+                        onClick={onRenew}
+                    >
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 rounded-xl bg-white/20">
+                                        <Star className="w-5 h-5 fill-current" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold">尊享版</h2>
+                                        <p className="text-white/70 text-xs">强烈推荐</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">Premium</div>
+                            </div>
+                            <div className="space-y-4 pt-4 border-t border-white/10">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                    <span className="text-sm">无限次数故事录制</span>
+                                </div>
+                                <div className="flex items-center space-x-3 font-medium">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                    <span className="text-sm">价值¥599精装传记</span>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                    <span className="text-sm">专业级 AI 深度写作</span>
+                                </div>
+                            </div>
+                            <button className="mt-8 w-full py-3 bg-white text-amber-600 rounded-2xl font-bold hover:shadow-lg transition-all flex items-center justify-center space-x-2">
+                                <span>立即升级</span>
+                                <ArrowRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                        {/* Shimmer Effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                    </motion.div>
+                </div>
+            ) : (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative overflow-hidden rounded-3xl p-8 mb-12 shadow-xl bg-gradient-to-br from-amber-200 via-amber-400 to-amber-500 text-amber-950 ring-1 ring-amber-400/50"
+                >
+                    <div className="relative z-10">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 rounded-xl scale-110 shadow-sm bg-white/40 text-amber-900">
+                                    <Star className="w-6 h-6 fill-current" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold tracking-tight">尊享会员 · 已激活</h2>
+                                    <p className="text-amber-800 text-sm mt-1">感谢您支持长生记 Everstory</p>
+                                </div>
+                            </div>
                             <div className="bg-amber-900/10 border border-amber-900/20 px-4 py-1.5 rounded-full text-amber-900 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
                                 Premium
                             </div>
-                        )}
-                    </div>
+                        </div>
 
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 mt-10 p-6 rounded-2xl border ${isPremium
-                        ? 'bg-white/30 border-amber-900/10'
-                        : 'bg-white/5 border-white/10 backdrop-blur-sm'
-                        }`}>
-                        <div className="flex items-center space-x-4">
-                            <Clock className={`w-5 h-5 ${isPremium ? 'text-amber-900/40' : 'text-white/50'}`} />
-                            <div>
-                                <p className={`text-xs font-medium uppercase tracking-wider ${isPremium ? 'text-amber-900/50' : 'text-white/50'}`}>有效期至</p>
-                                <p className="text-lg font-bold">{isPremium ? '2026年03月05日' : '----'}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10 p-6 rounded-2xl border bg-white/30 border-amber-900/10">
+                            <div className="flex items-center space-x-4">
+                                <Clock className="w-5 h-5 text-amber-900/40" />
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-wider text-amber-900/50">有效期至</p>
+                                    <p className="text-lg font-bold">2026年03月05日</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <CreditCard className="w-5 h-5 text-amber-900/40" />
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-wider text-amber-900/50">当前套餐</p>
+                                    <p className="text-lg font-bold">精装传记尊享版</p>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center space-x-4">
-                            <CreditCard className={`w-5 h-5 ${isPremium ? 'text-amber-900/40' : 'text-white/50'}`} />
-                            <div>
-                                <p className={`text-xs font-medium uppercase tracking-wider ${isPremium ? 'text-amber-900/50' : 'text-white/50'}`}>当前套餐</p>
-                                <p className="text-lg font-bold">{isPremium ? '精装传记尊享版' : '基础体验版'}</p>
-                            </div>
-                        </div>
+
+                        <button
+                            onClick={onRenew}
+                            className="mt-8 w-full py-4 rounded-2xl font-bold shadow-lg transition-all cursor-pointer flex items-center justify-center space-x-2 bg-amber-950 text-white hover:bg-black hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                            <span>提前续费</span>
+                            <ArrowRight className="w-5 h-5" />
+                        </button>
                     </div>
 
-                    <button
-                        onClick={onRenew}
-                        className={`mt-8 w-full py-4 rounded-2xl font-bold shadow-lg transition-all cursor-pointer flex items-center justify-center space-x-2 ${isPremium
-                            ? 'bg-amber-950 text-white hover:bg-black hover:scale-[1.01] active:scale-[0.99]'
-                            : 'bg-white text-gray-900 hover:shadow-white/20 hover:scale-[1.01] active:scale-[0.99]'
-                            }`}
-                    >
-                        <span>{isPremium ? '提前续费' : '立即升级'}</span>
-                        <ArrowRight className="w-5 h-5" />
-                    </button>
-                </div>
-
-                {/* Decorative background elements */}
-                {isPremium ? (
-                    <>
-                        <div className="absolute top-[-10%] right-[-5%] w-72 h-72 bg-white/20 rounded-full blur-3xl animate-pulse" />
-                        <div className="absolute bottom-[-10%] left-[-5%] w-72 h-72 bg-amber-500/20 rounded-full blur-3xl" />
-                    </>
-                ) : (
-                    <>
-                        <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-amber-400/10 rounded-full blur-3xl" />
-                        <div className="absolute bottom-[-20%] left-[-10%] w-64 h-64 bg-teal-400/10 rounded-full blur-3xl shadow-[0_0_100px_rgba(255,255,255,0.1)]" />
-                    </>
-                )}
-            </motion.div>
+                    {/* Decorative background elements */}
+                    <div className="absolute top-[-10%] right-[-5%] w-72 h-72 bg-white/20 rounded-full blur-3xl animate-pulse" />
+                    <div className="absolute bottom-[-10%] left-[-5%] w-72 h-72 bg-amber-500/20 rounded-full blur-3xl" />
+                </motion.div>
+            )}
 
             {/* Benefits Section */}
             <h3 className="text-lg font-bold text-gray-800 mb-6 px-2">尊享版核心权益</h3>

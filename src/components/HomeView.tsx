@@ -51,14 +51,14 @@ export default function HomeView({
   const flowSteps = [
     {
       id: 'upgrade',
-      title: premiumStatus ? '尊享会员' : '立即订购',
+      title: premiumStatus ? '尊享会员' : '立即升级',
       desc: premiumStatus
         ? `尊敬的尊享会员，您已购 ${purchasedBooksCount} 本精装传记`
-        : '为至亲写下一生传记',
+        : '升级为尊享版开启记录之旅',
       icon: premiumStatus ? Star : Heart,
       color: premiumStatus ? 'text-amber-700' : 'text-amber-600',
       bg: premiumStatus ? 'bg-amber-100' : 'bg-amber-50',
-      action: () => onNavigate(premiumStatus ? 'membership' : 'buy-now')
+      action: () => onNavigate('membership')
     },
     {
       id: 'invite',
