@@ -327,8 +327,8 @@ export default function AuthView() {
                                             value={otpCode}
                                             onChange={(e) => setOtpCode(e.target.value)}
                                             className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary outline-none"
-                                            placeholder="输入8位验证码"
-                                            maxLength={8}
+                                            placeholder="输入6位验证码"
+                                            maxLength={6}
                                         />
                                     </div>
                                     <button
