@@ -34,8 +34,8 @@ export default function MembershipManagementView({
     const benefits = [
         {
             icon: Zap,
-            title: '无限AI故事创作',
-            description: '享受无限次的AI辅助录入和润色服务，让回忆更精彩。',
+            title: '无限次数故事录制',
+            description: '享受无限次的录入和AI润色辅助服务，让人生回忆更完整。',
             color: 'text-amber-500',
             bg: 'bg-amber-50'
         },
