@@ -540,7 +540,7 @@ export default function App() {
                 <span className="truncate">兑换券</span>
                 <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity ml-2 shrink-0" />
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5 truncate">使用兑换码增加积分</div>
+              <div className="text-[10px] text-gray-400 mt-0.5 truncate">使用兑换码获得积分</div>
             </div>
           </button>
         </div>
