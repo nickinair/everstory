@@ -268,7 +268,7 @@ export default function AuthView() {
                             </div>
                         )}
 
-                        <form onSubmit={mode === 'login' ? handleLogin : mode === 'register' ? handleRegister : handleResetPassword} className="space-y-3 flex-1 flex flex-col">
+                        <form onSubmit={mode === 'login' ? handleLogin : mode === 'register' ? handleRegister : handleResetPassword} className={`space-y-3 flex-1 flex flex-col ${mode === 'login' ? 'pt-8' : ''}`}>
                             {/* Account Method Tabs */}
                             <div className="flex p-1 bg-gray-900/[0.03] rounded-lg mb-4">
                                 <button
