@@ -491,9 +491,11 @@ app.post('/api/auth/update-phone', async (req, res) => {
 const VOLC_ARK_API_KEY = process.env.VOLC_ARK_API_KEY;
 const VOLC_ARK_ENDPOINT_ID = process.env.VOLC_ARK_ENDPOINT_ID;
 const VOLC_ASR_APP_ID = process.env.VOLC_ASR_APP_ID;
+const VOLC_ASR_ACCESS_TOKEN = process.env.VOLC_ASR_ACCESS_TOKEN; // Different token for ASR
 
 import axios from 'axios';
 import FormData from 'form-data';
+import crypto from 'crypto';
 
 // LLM Helper (OpenAI compatible API with Volcengine)
 // Reference used from user snippet: axios.post to ark.cn-beijing.volces.com/api/v3/chat/completions
@@ -553,6 +555,9 @@ async function callDoubaoASR(base64Data, mimeType) {
   console.log(`[Doubao ASR] Initiating v3 request - AppId: ${VOLC_ASR_APP_ID}`);
 
   try {
+    // Determine the active access key specifically for ASR
+    const asrAccessKey = VOLC_ASR_ACCESS_TOKEN || VOLC_ARK_API_KEY;
+
     const res = await axios.post(
       url,
       {
@@ -569,9 +574,11 @@ async function callDoubaoASR(base64Data, mimeType) {
         headers: {
           'Content-Type': 'application/json',
           'X-Api-App-Key': VOLC_ASR_APP_ID,
-          'X-Api-Access-Key': VOLC_ARK_API_KEY,
+          'X-Api-Access-Key': asrAccessKey,
           'X-Api-Resource-Id': 'volc.bigasr.auc_turbo', // Required for Turbo ASR
-          'X-Api-Connect-Id': crypto.randomUUID()
+          'X-Api-Connect-Id': crypto.randomUUID(),
+          'X-Api-Request-Id': crypto.randomUUID(),     // Fix: Missing basicHttpRoutingPreference
+          'X-Api-Sequence': -1                         // Fix: Complete requirement for Flash API
         }
       }
     );
