@@ -499,6 +499,12 @@ const VOLC_ASR_APP_ID = process.env.VOLC_ASR_APP_ID;
 const VOLC_ASR_ACCESS_TOKEN = process.env.VOLC_ASR_ACCESS_TOKEN; // Different token for ASR
 
 import axios from 'axios';
+
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+
+// Initialize ffmpeg path
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 // LLM Helper (OpenAI compatible API with Volcengine)
 // Reference used from user snippet: axios.post to ark.cn-beijing.volces.com/api/v3/chat/completions
 async function callDoubaoLLM(prompt, options = {}) {
@@ -553,26 +559,45 @@ const VOLC_CONFIG = {
   SYNC_API: 'https://openspeech.bytedance.com/api/v1/recognize'
 };
 
+async function convertAudioToWav(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .toFormat('wav')
+      // Doubao ASR standard requirement is usually 16kHz, 16-bit, mono
+      .audioFrequency(16000)
+      .audioChannels(1)
+      .on('end', () => resolve(outputPath))
+      .on('error', (err) => reject(err))
+      .save(outputPath);
+  });
+}
+
 async function callDoubaoASR(base64Data, mimeType) {
-  const format = mimeType.includes('webm') ? 'webm' : (mimeType.includes('mp4') ? 'mp4' : 'wav');
-  const tempFileName = `audio_${crypto.randomUUID()}.${format}`;
-  const tempFilePath = path.join(os.tmpdir(), tempFileName);
+  const originalFormat = mimeType.includes('webm') ? 'webm' : (mimeType.includes('mp4') ? 'mp4' : 'wav');
+  const tempId = crypto.randomUUID();
+  const tempInputPath = path.join(os.tmpdir(), `audio_in_${tempId}.${originalFormat}`);
+  const tempOutputPath = path.join(os.tmpdir(), `audio_out_${tempId}.wav`);
 
   try {
-    // 1. Write base64 audio to temp file
+    // 1. Write base64 audio to temp input file
     const buffer = Buffer.from(base64Data, 'base64');
-    fs.writeFileSync(tempFilePath, buffer);
-    console.log(`[Doubao ASR] Temp audio file created: ${tempFilePath} (Format: ${format})`);
+    fs.writeFileSync(tempInputPath, buffer);
+    console.log(`[Doubao ASR] Temp input audio created: ${tempInputPath} (Format: ${originalFormat})`);
 
-    // 2. Build FormData payload exactly like test-asr.js
+    // 2. Convert to standard WAV (16kHz, Mono) for Volcengine
+    console.log(`[Doubao ASR] ⚙️ Converting to standard WAV format via ffmpeg...`);
+    await convertAudioToWav(tempInputPath, tempOutputPath);
+    console.log(`[Doubao ASR] ✅ Audio converted successfully: ${tempOutputPath}`);
+
+    // 3. Build FormData payload using the converted WAV
     const formData = new FormData();
     formData.append('appid', VOLC_CONFIG.APP_ID);
     formData.append('language', 'zh-CN');
-    formData.append('format', format);
-    formData.append('audio', fs.createReadStream(tempFilePath));
+    formData.append('format', 'wav');
+    formData.append('audio', fs.createReadStream(tempOutputPath));
 
-    // 3. Send Request
-    console.log("[Doubao ASR] 🔹 发送录音至火山 V1 同步识别接口...");
+    // 4. Send Request
+    console.log("[Doubao ASR] 🔹 发送标准WAV录音至火山 V1 同步识别接口...");
     const response = await axios.post(VOLC_CONFIG.SYNC_API, formData, {
       headers: {
         'Authorization': `Bearer ${VOLC_CONFIG.ACCESS_TOKEN}`,
@@ -583,14 +608,19 @@ async function callDoubaoASR(base64Data, mimeType) {
     if (response.data.code === 0) {
       const finalText = response.data.data.text || response.data.data.sentences?.map((s) => s.text).join('') || '';
       console.log(`[Doubao ASR] ✅ 识别成功，文本长度：${finalText.length}字`);
-      if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+
+      // Cleanup
+      if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+      if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
+
       return finalText;
     } else {
       throw new Error(`Volc API Error: ${response.data.message || JSON.stringify(response.data)}`);
     }
 
   } catch (error) {
-    if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+    if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+    if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
     console.error("[Doubao ASR] ❌ ASR识别失败：", error.message, error.response?.data ? JSON.stringify(error.response?.data, null, 2) : '');
     throw error;
   }
