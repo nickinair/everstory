@@ -20,6 +20,12 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
   const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sanitizeFilename = (name: string) => {
+    // Keep only ASCII letters, numbers, and basic separators
+    const ext = name.split('.').pop();
+    const cleanName = name.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
+    return `${cleanName}.${ext}`;
+  };
 
   const captureVideoThumbnail = (videoBlob: Blob): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -134,11 +140,11 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
     try {
       let finalImageUrl = '';
       let videoUrl = '';
-
       if (mediaType === 'video') {
         const timestamp = Date.now();
+        const safeName = sanitizeFilename(mediaFile.name);
         // 1. Upload Video
-        videoUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories/video_${timestamp}_${mediaFile.name}`);
+        videoUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories/video_${timestamp}_${safeName}`);
 
         // 2. Capture and Upload Thumbnail
         try {
@@ -155,13 +161,15 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
         if (!finalImageUrl) finalImageUrl = videoUrl;
       } else if (mediaType === 'audio') {
         const timestamp = Date.now();
+        const safeName = sanitizeFilename(mediaFile.name);
         // Upload Audio to videoUrl field (consistent with recording flow)
-        videoUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories/audio_${timestamp}_${mediaFile.name}`);
+        videoUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories/audio_${timestamp}_${safeName}`);
         finalImageUrl = '/audio_cover.png';
       } else {
         // Just upload image
         const timestamp = Date.now();
-        finalImageUrl = await databaseService.uploadMedia(mediaFile, `stories/image_${timestamp}_${mediaFile.name}`);
+        const safeName = sanitizeFilename(mediaFile.name);
+        finalImageUrl = await databaseService.uploadMedia(mediaFile, `stories/image_${timestamp}_${safeName}`);
       }
 
       // 3. Create Story
