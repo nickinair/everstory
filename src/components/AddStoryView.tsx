@@ -225,7 +225,7 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
 
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`relative aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden ${mediaPreview ? 'border-accent' : 'border-gray-200 hover:border-accent hover:bg-accent/5'
+                className={`relative aspect-[2.4/1] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all overflow-hidden ${mediaPreview ? 'border-accent' : 'border-gray-200 hover:border-accent hover:bg-accent/5'
                   }`}
               >
                 {mediaPreview ? (
@@ -257,12 +257,12 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
                     </button>
                   </>
                 ) : (
-                  <div className="text-center p-8">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Upload className="w-8 h-8 text-gray-400" />
+                  <div className="text-center p-4">
+                    <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Upload className="w-6 h-6 text-gray-400" />
                     </div>
-                    <p className="text-gray-600 font-medium mb-1">点击或拖拽上传</p>
-                    <p className="text-xs text-gray-400">支持图片或视频文件</p>
+                    <p className="text-sm text-gray-600 font-medium mb-0.5">点击或拖拽上传</p>
+                    <p className="text-[10px] text-gray-400">支持图片或视频文件</p>
                   </div>
                 )}
                 <input
@@ -314,8 +314,8 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="在这里记录您的回忆..."
-                  rows={12}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all resize-none leading-relaxed"
+                  rows={15}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-accent outline-none transition-all resize-none leading-relaxed text-sm lg:text-base"
                 />
               </div>
             </div>

@@ -347,7 +347,8 @@ export const databaseService = {
                 date: new Date().toLocaleDateString('zh-CN'),
                 metadata: {
                     ...story.metadata,
-                    videoUrl: story.videoUrl
+                    videoUrl: story.videoUrl,
+                    additionalImages: story.additionalImages || []
                 },
                 promptId: story.promptId
             };
@@ -359,7 +360,8 @@ export const databaseService = {
 
         const metadata = {
             ...story.metadata,
-            videoUrl: story.videoUrl
+            videoUrl: story.videoUrl,
+            additionalImages: story.additionalImages || []
         };
 
         const { data, error } = await supabase
@@ -417,6 +419,7 @@ export const databaseService = {
             ...(updates.metadata || {})
         };
         if (updates.videoUrl) metadata.videoUrl = updates.videoUrl;
+        if (updates.additionalImages) metadata.additionalImages = updates.additionalImages;
 
         const updatePayload: any = {};
         if (updates.title !== undefined) updatePayload.title = updates.title;

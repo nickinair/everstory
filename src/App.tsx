@@ -89,6 +89,7 @@ export default function App() {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeModalType, setUpgradeModalType] = useState<'prompts' | 'stories' | 'projects' | 'order-required'>('prompts');
   const [pendingInviteProjectId, setPendingInviteProjectId] = useState<string | null>(null);
+  const [isQuickRecord, setIsQuickRecord] = useState(false);
   // High-level restriction check
   const hasOrder = orders && orders.length > 0;
 
@@ -660,6 +661,18 @@ export default function App() {
                         setCurrentView('story-detail');
                       }}
                       onAddStory={() => setCurrentView('add-story')}
+                      onQuickRecord={() => {
+                        setIsQuickRecord(true);
+                        const defaultPrompt: Prompt = {
+                          id: 'quick-record',
+                          question: '请讲一段您的故事...',
+                          imageUrl: '/audio_cover.png',
+                          status: 'sent',
+                          sentDate: new Date().toISOString()
+                        };
+                        setSelectedPrompt(defaultPrompt);
+                        setCurrentView('recording');
+                      }}
                     />
                   )}
                   {currentView === 'prompts' && (
@@ -845,22 +858,21 @@ export default function App() {
             )}
             {currentView === 'recording' && selectedPrompt && currentProjectId && (
               <RecordingFlow
-                projectId={currentProjectId}
-                prompt={selectedPrompt}
+                projectId={currentProjectId!}
+                prompt={selectedPrompt!}
+                isQuickRecord={isQuickRecord}
                 prompts={prompts}
-                onSelectPrompt={setSelectedPrompt}
-                onClose={() => setCurrentView('home')}
-                onComplete={(data) => {
-                  console.log('Recording complete:', data);
-                  if (currentProjectId) {
-                    fetchProjectData(currentProjectId);
-                  }
-                  if (data?.storyId) {
-                    setSelectedStoryId(data.storyId);
-                    setCurrentView('story-detail');
-                  } else {
-                    setCurrentView('stories');
-                  }
+                onSelectPrompt={(p) => setSelectedPrompt(p)}
+                onClose={() => {
+                  setSelectedPrompt(null);
+                  setIsQuickRecord(false);
+                  setCurrentView('stories');
+                }}
+                onComplete={() => {
+                  setSelectedPrompt(null);
+                  setIsQuickRecord(false);
+                  setCurrentView('stories');
+                  fetchProjectData(currentProjectId!);
                 }}
               />
             )}

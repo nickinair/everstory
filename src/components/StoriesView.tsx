@@ -12,6 +12,7 @@ interface StoriesViewProps {
   members: ProjectMember[];
   onStoryClick: (id: string) => void;
   onAddStory: () => void;
+  onQuickRecord: () => void;
   hasOrder: boolean;
   onShowUpgrade: () => void;
 }
@@ -22,6 +23,7 @@ export default function StoriesView({
   members,
   onStoryClick,
   onAddStory,
+  onQuickRecord,
   hasOrder,
   onShowUpgrade
 }: StoriesViewProps) {
@@ -90,6 +92,12 @@ export default function StoriesView({
             className="px-4 py-2 bg-white border border-gray-100 rounded-lg text-sm text-gray-700 shadow-sm hover:bg-stone-50 transition-colors cursor-pointer"
           >
             邀请亲友
+          </button>
+          <button
+            onClick={onQuickRecord}
+            className="px-4 py-2 bg-accent hover:bg-teal-700 text-white rounded-lg shadow-sm text-sm font-medium flex items-center transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4 mr-1" /> 立即录制
           </button>
         </div>
       </header>

@@ -29,6 +29,7 @@ interface RecordingFlowProps {
   onSelectPrompt?: (prompt: Prompt) => void;
   onClose: () => void;
   onComplete: (storyData: any) => void;
+  isQuickRecord?: boolean;
 }
 
 type RecordingStep =
@@ -43,7 +44,7 @@ type RecordingStep =
   | 'success'
   | 'summary';
 
-export default function RecordingFlow({ projectId, prompt, prompts = [], onSelectPrompt, onClose, onComplete }: RecordingFlowProps) {
+export default function RecordingFlow({ projectId, prompt, prompts = [], onSelectPrompt, onClose, onComplete, isQuickRecord = false }: RecordingFlowProps) {
   const [step, setStep] = useState<RecordingStep>('welcome');
   const [isPromptSelectorOpen, setIsPromptSelectorOpen] = useState(false);
   const [mode, setMode] = useState<'audio' | 'video'>('video');
@@ -491,7 +492,7 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
 
   const handleNext = async () => {
     switch (step) {
-      case 'welcome': setStep('prompt'); break;
+      case 'welcome': setStep(isQuickRecord ? 'mode' : 'prompt'); break;
       case 'prompt': setStep('mode'); break;
       case 'mode': setStep('test'); break;
       case 'test': setStep('ready'); break;
@@ -552,12 +553,12 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
       const initialContent = 'AI 正在记录你的心声...';
       setSavingStatus('正在创建故事记录...');
       const story = await databaseService.createStory(projectId, {
-        title: `故事 - ${prompt.question}`,
+        title: isQuickRecord ? '正在生成标题...' : `故事 - ${prompt.question}`,
         content: initialContent,
         imageUrl: coverUrl,
         videoUrl: publicUrl,
         type: mode,
-        promptId: prompt.id
+        promptId: isQuickRecord ? undefined : prompt.id
       });
       setNewStoryId(story.id);
       setTranscription(initialContent);
@@ -573,7 +574,24 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
           const transcriptionText = await transcribeMedia(base64Data, recordedBlob.type || (mode === 'video' ? 'video/mp4' : 'audio/mp4'));
 
           // Update the story in the database
-          await databaseService.updateStory(story.id, { content: transcriptionText });
+          const updates: any = { content: transcriptionText };
+
+          if (isQuickRecord && transcriptionText && !transcriptionText.includes('未检测到语音')) {
+            try {
+              const { generateStoryFromMedia } = await import('../services/aiService');
+              // We reuse generateStoryFromMedia just to get a title from the text we have now
+              // Or even better, a simple title generation prompt
+              const aiResult = await generateStoryFromMedia(base64Data, recordedBlob.type || (mode === 'video' ? 'video/mp4' : 'audio/mp4'));
+              if (aiResult.title) {
+                updates.title = aiResult.title;
+              }
+            } catch (aiErr) {
+              console.error('Failed to generate AI title:', aiErr);
+              updates.title = `新故事 - ${new Date().toLocaleDateString()}`;
+            }
+          }
+
+          await databaseService.updateStory(story.id, updates);
 
           // Update local state for summary/review if they are still viewing it
           setTranscription(transcriptionText);
@@ -609,7 +627,7 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
 
   const renderReadyStep = (isCountdown = false) => (
     <div className={`flex flex-col h-full bg-[#f5f5f0] p-4 lg:p-12 overflow-y-auto lg:overflow-hidden ${isCountdown ? 'opacity-40' : ''}`}>
-      <header className="flex items-center justify-between mb-4 lg:mb-8 shrink-0">
+      <header className="flex items-center justify-between mb-2 lg:mb-8 shrink-0">
         <button onClick={handleBack} className="p-2 hover:bg-black/5 rounded-full transition-colors" disabled={isCountdown}>
           <ArrowLeft className="w-6 h-6 text-gray-600" />
         </button>
@@ -618,30 +636,70 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
       </header>
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full justify-center min-h-0">
-        <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 mb-4 flex flex-col min-h-0">
-          <div className="relative flex-1 min-h-0 aspect-video lg:aspect-auto">
-            <img src={prompt.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        {isQuickRecord && (
+          <div className="flex justify-center mb-4 shrink-0">
+            <div className="flex space-x-1 items-center h-6">
+              {audioLevels.map((level, i) => (
+                <motion.div
+                  key={i}
+                  animate={{ height: level }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+                  className="w-1.5 bg-[#4a7c7c] rounded-full"
+                />
+              ))}
+            </div>
           </div>
-          <div className="p-4 lg:p-6 shrink-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Charlie 提问储备</p>
-            <h3 className="text-base lg:text-lg font-serif text-gray-800 leading-snug">{prompt.question}</h3>
-          </div>
+        )}
+
+        <div className={`bg-gray-900 rounded-3xl overflow-hidden flex-1 mb-4 relative w-full lg:max-w-none mx-auto flex items-center justify-center shadow-2xl min-h-0 ${isQuickRecord ? 'aspect-[4/3]' : 'aspect-video lg:aspect-auto'}`}>
+          {!isQuickRecord ? (
+            <>
+              <div className="relative flex-1 min-h-0 w-full">
+                <img src={prompt.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              </div>
+              <div className="p-4 lg:p-6 bg-white shrink-0 w-full">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Charlie 提问储备</p>
+                <h3 className="text-base lg:text-lg font-serif text-gray-800 leading-snug">{prompt.question}</h3>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="relative flex-1 min-h-0 aspect-[4/3] flex items-center justify-center overflow-hidden">
+                {mode === 'video' ? (
+                  <video
+                    ref={setVideoPreviewRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-[#4a7c7c]/10">
+                    <Mic className="w-24 lg:w-32 h-24 lg:h-32 text-[#4a7c7c]" />
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 border-8 border-white/20 pointer-events-none rounded-3xl"></div>
+            </>
+          )}
         </div>
 
-        <div className="w-full shrink-0 pb-4 pt-4 lg:pt-8 flex items-center space-x-4">
-          <div className="w-32 lg:w-48 aspect-[4/3] rounded-3xl overflow-hidden border-4 border-white shadow-lg shrink-0 bg-black flex items-center justify-center">
-            {mode === 'video' ? (
-              <video
-                ref={setVideoPreviewRef}
-                autoPlay
-                muted
-                playsInline
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
-            ) : (
-              <Mic className="w-8 lg:w-12 h-8 lg:h-12 text-[#4a7c7c]" />
-            )}
-          </div>
+        <div className="w-full shrink-0 pb-4 pt-2 lg:pt-8 flex items-center space-x-4">
+          {!isQuickRecord && (
+            <div className="w-32 lg:w-48 aspect-[4/3] rounded-3xl overflow-hidden border-4 border-white shadow-lg shrink-0 bg-black flex items-center justify-center">
+              {mode === 'video' ? (
+                <video
+                  ref={setVideoPreviewRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+              ) : (
+                <Mic className="w-8 lg:w-12 h-8 lg:h-12 text-[#4a7c7c]" />
+              )}
+            </div>
+          )}
           <div className="flex-1">
             <button
               onClick={handleNext}
@@ -981,37 +1039,65 @@ export default function RecordingFlow({ projectId, prompt, prompts = [], onSelec
             </header>
 
             <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full justify-center min-h-0 relative">
-              <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 mb-4 flex flex-col min-h-0">
-                <div className="relative flex-1 min-h-0 aspect-video lg:aspect-auto">
-                  <img src={prompt.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              {!isQuickRecord ? (
+                <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 mb-4 flex flex-col min-h-0">
+                  <div className="relative flex-1 min-h-0 aspect-video lg:aspect-auto">
+                    <img src={prompt.imageUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="p-4 lg:p-6 shrink-0">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Charlie 提问储备</p>
+                    <h3 className="text-base lg:text-xl font-serif text-gray-800 leading-snug">{prompt.question}</h3>
+                  </div>
                 </div>
-                <div className="p-4 lg:p-6 shrink-0">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Charlie 提问储备</p>
-                  <h3 className="text-base lg:text-xl font-serif text-gray-800 leading-snug">{prompt.question}</h3>
+              ) : (
+                <div className="bg-gray-900 rounded-3xl overflow-hidden shadow-2xl mb-4 relative flex-1 min-h-0 flex items-center justify-center aspect-[4/3]">
+                  <div className="relative flex-1 min-h-0 aspect-[4/3] flex items-center justify-center overflow-hidden">
+                    {mode === 'video' ? (
+                      <video
+                        ref={setRecordingPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover scale-x-[-1]"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#4a7c7c]/10">
+                        <Mic className="w-24 lg:w-32 h-24 lg:h-32 text-[#4a7c7c]" />
+                      </div>
+                    )}
+                    {isPaused && (
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                        <Pause className="w-10 h-10 text-white opacity-80" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 border-8 border-white/20 pointer-events-none rounded-3xl"></div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex items-end justify-between w-full mt-4">
-                <div className="w-32 lg:w-48 aspect-[4/3] rounded-3xl overflow-hidden border-4 border-white shadow-2xl bg-black relative shrink-0">
-                  {mode === 'video' ? (
-                    <video
-                      ref={setRecordingPreviewRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover scale-x-[-1]"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-[#4a7c7c]/10">
-                      <Mic className="w-8 lg:w-12 h-8 lg:h-12 text-[#4a7c7c]" />
-                    </div>
-                  )}
-                  {isPaused && (
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
-                      <Pause className="w-10 h-10 text-white opacity-80" />
-                    </div>
-                  )}
-                </div>
+              <div className={`flex items-end ${isQuickRecord ? 'justify-center' : 'justify-between'} w-full mt-4`}>
+                {!isQuickRecord && (
+                  <div className="w-32 lg:w-48 aspect-[4/3] rounded-3xl overflow-hidden border-4 border-white shadow-2xl bg-black relative shrink-0">
+                    {mode === 'video' ? (
+                      <video
+                        ref={setRecordingPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover scale-x-[-1]"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#4a7c7c]/10">
+                        <Mic className="w-8 lg:w-12 h-8 lg:h-12 text-[#4a7c7c]" />
+                      </div>
+                    )}
+                    {isPaused && (
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                        <Pause className="w-10 h-10 text-white opacity-80" />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex space-x-6 lg:space-x-8">
                   <div className="flex flex-col items-center space-y-2">

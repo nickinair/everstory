@@ -67,7 +67,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
 
   const [isConfirmCloseModalOpen, setIsConfirmCloseModalOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [activeImageUrl, setActiveImageUrl] = useState<string | null>(story.imageUrl || (additionalImages.length > 0 ? additionalImages[0] : null));
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -100,6 +102,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     setEditedContent(story.content || '');
     setIsTranscribing((story.content || '').includes('AI 正在记录你的心声'));
     setAdditionalImages(story.additionalImages || []);
+    setActiveImageUrl(story.imageUrl || (story.additionalImages && story.additionalImages.length > 0 ? story.additionalImages[0] : null));
   }, [story.id]);
 
   useEffect(() => {
@@ -309,9 +312,21 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    if (additionalImages.length >= 5) {
+      alert('最多只能上传5张图片');
+      return;
+    }
+
+    const remainingSlots = 5 - additionalImages.length;
+    const filesToUpload = Array.from(files).slice(0, remainingSlots);
+
+    if (filesToUpload.length < files.length) {
+      alert(`由于限制，仅前 ${remainingSlots} 张图片将被上传`);
+    }
+
     setIsUploadingPhoto(true);
     try {
-      const uploadPromises = Array.from(files).map((file: File) => {
+      const uploadPromises = filesToUpload.map((file: File) => {
         const fileExt = file.name.split('.').pop() || 'png';
         const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `stories/${story.id}/${fileName}`;
@@ -320,17 +335,58 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
       const urls = await Promise.all(uploadPromises);
 
       const newImages = [...additionalImages, ...urls];
-      await databaseService.updateStory(story.id, {
+      const updates: Partial<Story> = {
         additionalImages: newImages
-      });
+      };
+
+      // For audio stories, set the first image as the cover if no custom cover is set
+      // or if we want to ensure the first of the 5 is the main visual
+      if (story.type === 'audio' && newImages.length > 0) {
+        updates.imageUrl = newImages[0];
+      }
+
+      await databaseService.updateStory(story.id, updates);
 
       setAdditionalImages(newImages);
+      if (newImages.length === urls.length) { // First upload
+        setActiveImageUrl(newImages[0]);
+      }
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Photo upload failed:', error);
       alert('上传失败，请重试');
     } finally {
       setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!imageToDelete) return;
+
+    try {
+      const newImages = additionalImages.filter(img => img !== imageToDelete);
+      const updates: Partial<Story> = {
+        additionalImages: newImages
+      };
+
+      // If we deleted the cover image, update it to the new first image
+      if (story.imageUrl === imageToDelete) {
+        updates.imageUrl = newImages.length > 0 ? newImages[0] : '';
+      }
+
+      await databaseService.updateStory(story.id, updates);
+
+      setAdditionalImages(newImages);
+      // Update active image if it was the one deleted
+      if (activeImageUrl === imageToDelete) {
+        setActiveImageUrl(newImages.length > 0 ? newImages[0] : (updates.imageUrl || null));
+      }
+
+      setImageToDelete(null);
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error('Delete photo failed:', error);
+      alert('删除失败，请重试');
     }
   };
 
@@ -434,7 +490,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               ) : (
                 <div className="w-full h-full relative bg-stone-900 flex items-center justify-center overflow-hidden">
                   <img
-                    src={(story.imageUrl || (story.additionalImages && story.additionalImages.length > 0 ? story.additionalImages[0] : '')) || (story.type === 'audio' ? '/audio_cover.png' : '')}
+                    src={activeImageUrl || story.imageUrl || (story.type === 'audio' ? '/audio_cover.png' : '')}
                     alt={story.title}
                     className="w-full h-full object-cover opacity-80"
                     referrerPolicy="no-referrer"
@@ -476,42 +532,73 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
         {/* Right Side: Content & Transcript */}
         <div className="w-full lg:basis-[40%] bg-white flex flex-col flex-1 lg:h-full lg:min-h-0 shadow-2xl relative min-h-0">
           <div className="px-4 py-2 lg:px-6 lg:py-4 flex justify-between items-center border-b border-gray-100 shrink-0">
-            <div className="flex-1 flex items-center overflow-x-auto scrollbar-hide space-x-2 mr-3">
-              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 border-accent/20 overflow-hidden shrink-0 shadow-sm cursor-pointer">
-                {story.imageUrl || story.type === 'audio' ? (
-                  <img
-                    src={story.imageUrl || '/audio_cover.png'}
-                    alt="主图"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-300">
-                    <Play className="w-3 h-3" />
+            <div className="flex-1 flex items-center overflow-x-auto scrollbar-hide space-x-2 mr-3 py-1">
+              {/* Cover Image / Default Icon */}
+              <div
+                onClick={() => setActiveImageUrl(additionalImages[0] || story.imageUrl)}
+                className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === (additionalImages[0] || story.imageUrl) || (!activeImageUrl && !additionalImages.length) ? 'border-accent' : 'border-white/20'} overflow-hidden shrink-0 shadow-sm cursor-pointer hover:border-accent transition-all`}
+              >
+                {story.type === 'audio' && additionalImages.length === 0 && (!story.imageUrl || story.imageUrl === '/audio_cover.png') ? (
+                  <div className="w-full h-full bg-stone-900 flex items-center justify-center">
+                    <Mic className="w-4 h-4 text-[#4a7c7c]" />
                   </div>
+                ) : (
+                  <>
+                    <img
+                      src={additionalImages[0] || story.imageUrl || '/audio_cover.png'}
+                      alt="封面"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    {additionalImages.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImageToDelete(additionalImages[0]);
+                        }}
+                        className="absolute top-0 right-0 p-0.5 bg-black/40 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/60 rounded-bl-md"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
-              {additionalImages.map((url, idx) => (
+              {/* Additional Images */}
+              {additionalImages.slice(1).map((url, idx) => (
                 <div
                   key={idx}
-                  className="w-8 h-8 lg:w-10 lg:h-10 rounded-md border border-gray-100 hover:border-accent transition-all overflow-hidden shrink-0 cursor-pointer"
+                  onClick={() => setActiveImageUrl(url)}
+                  className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === url ? 'border-accent' : 'border-white/20'} transition-all overflow-hidden shrink-0 cursor-pointer hover:border-accent`}
                 >
-                  <img src={url} alt={`图片 ${idx + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img src={url} alt={`图片 ${idx + 2}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImageToDelete(url);
+                    }}
+                    className="absolute top-0 right-0 p-0.5 bg-black/40 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/60 rounded-bl-md"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
                 </div>
               ))}
 
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingPhoto}
-                className="w-8 h-8 lg:w-10 lg:h-10 rounded-md bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors shrink-0 disabled:opacity-50"
-              >
-                {isUploadingPhoto ? (
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Plus className="w-3 h-3" />
-                )}
-              </button>
+              {/* Upload Button */}
+              {additionalImages.length < 5 && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="w-8 h-8 lg:w-10 lg:h-10 rounded-md bg-white border border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 transition-colors shrink-0 disabled:opacity-50"
+                >
+                  {isUploadingPhoto ? (
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                </button>
+              )}
             </div>
 
             <div className="flex items-center space-x-1 lg:space-x-2">
@@ -973,7 +1060,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8"
             >
               <h2 className="text-xl font-bold text-gray-900 mb-2">删除故事</h2>
-              <p className="text-gray-500 mb-8 leading-relaxed">
+              <p className="text-gray-500 mb-8 leading-relaxed text-sm">
                 确定要删除这个故事吗？此操作无法撤销。
               </p>
               <div className="flex space-x-3">
@@ -997,6 +1084,41 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition shadow-md cursor-pointer"
                 >
                   确定删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {imageToDelete && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[120] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-8"
+            >
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">确认删除图片</h2>
+              <p className="text-gray-500 mb-8 leading-relaxed text-sm">
+                确定要从故事相册中删除这张图片吗？
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setImageToDelete(null)}
+                  className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleDeleteImage}
+                  className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition shadow-md cursor-pointer"
+                >
+                  确认删除
                 </button>
               </div>
             </motion.div>
@@ -1084,7 +1206,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                     <div key={item.id} className="flex space-x-4">
                       <div className="w-10 h-10 rounded-full bg-accent/20 flex-shrink-0 flex items-center justify-center text-accent font-bold">
                         {item.userAvatar ? (
-                          <img src={item.userAvatar} className="w-full h-full rounded-full object-cover" />
+                          <img src={item.userAvatar} className="w-full h-full rounded-full object-cover shadow-sm border border-gray-100" />
                         ) : (
                           item.userName.charAt(0)
                         )}
@@ -1118,6 +1240,6 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
           </>
         )}
       </AnimatePresence>
-    </motion.div >
+    </motion.div>
   );
 }
