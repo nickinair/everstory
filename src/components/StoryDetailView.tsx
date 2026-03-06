@@ -33,7 +33,7 @@ import {
   CheckCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Story, Prompt, ProjectMember } from '../types';
+import { Story, Prompt, ProjectMember, StoryInteraction } from '../types';
 import { databaseService } from '../services/databaseService';
 import { transcribeMedia, optimizeStoryContent } from '../services/aiService';
 import BookLoader from './BookLoader';
@@ -74,6 +74,15 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
+
+  // Interactions State
+  const [interactions, setInteractions] = useState<StoryInteraction[]>([]);
+  const [isInteractionPopoverOpen, setIsInteractionPopoverOpen] = useState(false);
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [interactionHistory, setInteractionHistory] = useState<(StoryInteraction & { storyTitle: string })[]>([]);
+  const [selectedReactions, setSelectedReactions] = useState<string[]>([]);
+  const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
+  const [showHeartAnimation, setShowHeartAnimation] = useState(false);
 
   useEffect(() => {
     const isTranscribingNow = editedContent.includes('AI 正在记录你的心声');
@@ -131,6 +140,86 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
       mediaRef.current.load();
     }
   }, [story.videoUrl]);
+
+  // Fetch interactions
+  useEffect(() => {
+    const fetchInteractions = async () => {
+      try {
+        const data = await databaseService.getStoryInteractions(story.id);
+        setInteractions(data);
+      } catch (err) {
+        console.error('Failed to fetch interactions:', err);
+      }
+    };
+    fetchInteractions();
+  }, [story.id]);
+
+  const fetchHistory = async () => {
+    try {
+      const data = await databaseService.getProjectInteractionHistory(story.projectId);
+      setInteractionHistory(data as any);
+      setIsHistoryDrawerOpen(true);
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+    }
+  };
+
+  const handleInteractionSubmit = async () => {
+    if (isSubmittingInteraction) return;
+
+    setIsSubmittingInteraction(true);
+    try {
+      // If user hasn't liked yet, treat this submission as including a like
+      const currentHasUserLiked = interactions.some(i => i.type === 'like');
+      if (!currentHasUserLiked) {
+        await databaseService.addStoryInteraction(story.id, 'like');
+      }
+
+      // Submit any selected reactions
+      for (const reaction of selectedReactions) {
+        await databaseService.addStoryInteraction(story.id, 'reaction', reaction);
+      }
+
+      // Refresh interactions - this will update the derived 'hasUserLiked'
+      const updated = await databaseService.getStoryInteractions(story.id);
+      setInteractions(updated);
+
+      // Animation and feedback
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 2000);
+
+      setSelectedReactions([]);
+      setIsInteractionPopoverOpen(false);
+    } catch (err) {
+      console.error('Failed to submit interaction:', err);
+    } finally {
+      setIsSubmittingInteraction(false);
+    }
+  };
+
+  const handleLike = async () => {
+    try {
+      await databaseService.addStoryInteraction(story.id, 'like');
+      const updated = await databaseService.getStoryInteractions(story.id);
+      setInteractions(updated);
+
+      setShowHeartAnimation(true);
+      setTimeout(() => setShowHeartAnimation(false), 1000);
+    } catch (err) {
+      console.error('Failed to like:', err);
+    }
+  };
+
+  const reactionOptions = [
+    '故事好感人~🥹',
+    '哈哈太有趣了😄',
+    '值得借鉴学习🤔',
+    'YYDS! 太厉害了😎',
+    'Love you❤️',
+    '原来如此😯'
+  ];
+
+  const hasUserLiked = interactions.some(i => i.type === 'like'); // Simplified check
 
   const togglePlay = async () => {
     if (!mediaRef.current) return;
@@ -337,7 +426,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               ) : (
                 <div className="w-full h-full relative bg-stone-900 flex items-center justify-center overflow-hidden">
                   <img
-                    src={story.type === 'audio' ? '/audio_cover.png' : (story.imageUrl || (story.additionalImages && story.additionalImages.length > 0 ? story.additionalImages[0] : ''))}
+                    src={(story.imageUrl || (story.additionalImages && story.additionalImages.length > 0 ? story.additionalImages[0] : '')) || (story.type === 'audio' ? '/audio_cover.png' : '')}
                     alt={story.title}
                     className="w-full h-full object-cover opacity-80"
                     referrerPolicy="no-referrer"
@@ -347,7 +436,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                       }
                     }}
                   />
-                  {story.type === 'audio' && (
+                  {(story.type === 'audio' && !story.imageUrl) && (
                     <audio
                       key={story.videoUrl}
                       ref={mediaRef as React.RefObject<HTMLAudioElement>}
@@ -440,6 +529,19 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                           <button
                             onClick={() => {
                               setIsMenuOpen(false);
+                              fetchHistory();
+                            }}
+                            className="w-full flex items-center space-x-3 px-4 py-3 text-gray-600 hover:bg-gray-50 transition-colors text-sm font-medium cursor-pointer"
+                          >
+                            <Heart className="w-4 h-4 text-gray-400 group-hover:text-red-500" />
+                            <span>互动记录</span>
+                          </button>
+
+                          <div className="h-px bg-gray-100 my-1" />
+
+                          <button
+                            onClick={() => {
+                              setIsMenuOpen(false);
                               setIsDeleteConfirmOpen(true);
                             }}
                             className="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors text-sm font-medium cursor-pointer"
@@ -473,6 +575,12 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                 />
               )}
             </AnimatePresence>
+
+            {!isEditing && !isGenerating && !isSaving && (
+              <div className="absolute top-4 right-4 lg:top-8 lg:right-10 z-20 flex items-center space-x-1">
+                {/* Redundant history button removed here as per user request */}
+              </div>
+            )}
 
             {(isGenerating || isSaving) ? (
               <div className="h-full flex flex-col items-center justify-center space-y-6 py-20">
@@ -579,10 +687,88 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               </>
             ) : (
               <>
-                <button className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group cursor-pointer">
-                  <Heart className="w-5 h-5 lg:w-6 lg:h-6 text-gray-400 group-hover:text-red-500 mb-1 lg:mb-1.5" />
-                  <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">互动</span>
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsInteractionPopoverOpen(!isInteractionPopoverOpen)}
+                    className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group cursor-pointer w-full"
+                  >
+                    <Heart className={`w-5 h-5 lg:w-6 lg:h-6 ${hasUserLiked ? 'text-red-400 fill-red-400' : 'text-gray-400 group-hover:text-red-500'} mb-1 lg:mb-1.5`} />
+                    <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">
+                      互动 {interactions.length > 0 && `(${interactions.length})`}
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {isInteractionPopoverOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[80]" onClick={() => setIsInteractionPopoverOpen(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                          className="absolute bottom-full left-0 mb-4 w-64 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.16)] z-[90] p-4 border border-gray-100"
+                        >
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-sm font-bold text-gray-800">发送互动</h3>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2">
+                            {reactionOptions.map((opt) => (
+                              <button
+                                key={opt}
+                                onClick={() => {
+                                  setSelectedReactions(prev =>
+                                    prev.includes(opt) ? prev.filter(p => p !== opt) : [...prev, opt]
+                                  );
+                                }}
+                                className={`px-4 py-2.5 rounded-xl text-left text-sm transition-all border ${selectedReactions.includes(opt)
+                                  ? 'bg-accent/10 border-accent text-accent font-medium'
+                                  : 'bg-white border-gray-100 text-gray-600 hover:border-accent hover:bg-accent/5'
+                                  }`}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            onClick={handleInteractionSubmit}
+                            disabled={isSubmittingInteraction || (selectedReactions.length === 0 && hasUserLiked)}
+                            className={`w-full mt-4 py-3 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center space-x-2 border ${hasUserLiked
+                              ? 'bg-gray-100 border-transparent text-gray-500 cursor-default'
+                              : 'bg-white border-gray-200 text-gray-900 hover:border-gray-300'
+                              }`}
+                          >
+                            {isSubmittingInteraction ? (
+                              <motion.div
+                                animate={{ scale: [1, 1.3, 1] }}
+                                transition={{ repeat: Infinity, duration: 0.6, ease: "easeInOut" }}
+                              >
+                                <Heart className="w-5 h-5 text-red-500 fill-red-500" />
+                              </motion.div>
+                            ) : (
+                              <>
+                                <div className="flex items-center space-x-2">
+                                  <Heart className={`w-4 h-4 ${hasUserLiked ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+                                  <span className={hasUserLiked ? 'text-gray-500' : 'text-black'}>点赞</span>
+                                </div>
+                                {showHeartAnimation && (
+                                  <motion.div
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: [0, 1.5, 0], y: -20 }}
+                                    className="text-red-500"
+                                  >
+                                    ❤️
+                                  </motion.div>
+                                )}
+                              </>
+                            )}
+                          </button>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
                 <button
                   onClick={() => setIsShareModalOpen(true)}
                   className="flex flex-col items-center justify-center p-2 lg:p-3 hover:bg-white rounded-xl transition-all group cursor-pointer"
@@ -841,6 +1027,86 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
           </div>
         )}
       </AnimatePresence>
-    </motion.div>
+
+      <AnimatePresence>
+        {isHistoryDrawerOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsHistoryDrawerOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100]"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[32px] z-[110] max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
+                <div className="flex items-center space-x-2">
+                  <div className="bg-accent/10 p-1.5 rounded-lg">
+                    <History className="w-4 h-4 text-accent" />
+                  </div>
+                  <h2 className="text-base font-bold text-gray-900">互动记录</h2>
+                </div>
+                <button
+                  onClick={() => setIsHistoryDrawerOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/30">
+                {interactionHistory.length === 0 ? (
+                  <div className="h-64 flex flex-col items-center justify-center text-center space-y-3">
+                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm">
+                      <Users className="w-8 h-8 text-gray-200" />
+                    </div>
+                    <p className="text-gray-400 text-sm">暂无互动记录，邀请家人一起参与吧</p>
+                  </div>
+                ) : (
+                  interactionHistory.map((item) => (
+                    <div key={item.id} className="flex space-x-4">
+                      <div className="w-10 h-10 rounded-full bg-accent/20 flex-shrink-0 flex items-center justify-center text-accent font-bold">
+                        {item.userAvatar ? (
+                          <img src={item.userAvatar} className="w-full h-full rounded-full object-cover" />
+                        ) : (
+                          item.userName.charAt(0)
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-1.5">
+                        <div className="flex justify-between items-baseline">
+                          <h4 className="font-bold text-gray-800 flex items-center space-x-2">
+                            <span>{item.userName}</span>
+                            <span className="text-[10px] font-normal px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded">
+                              {new Date(item.createdAt).toLocaleDateString()}
+                            </span>
+                          </h4>
+                        </div>
+                        <div className="bg-white p-3 rounded-2xl rounded-tl-none shadow-sm border border-gray-100">
+                          {item.type === 'like' ? (
+                            <div className="flex items-center space-x-2 text-red-500">
+                              <Heart className="w-4 h-4 fill-red-500" />
+                              <span className="text-sm font-medium">点亮了红心</span>
+                            </div>
+                          ) : (
+                            <p className="text-gray-600 text-sm leading-relaxed">{item.content}</p>
+                          )}
+                          <p className="text-[10px] text-gray-300 mt-2">互动于: {item.storyTitle}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </motion.div >
   );
 }

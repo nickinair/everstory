@@ -23,6 +23,7 @@ export interface PointTransaction {
 
 export interface Story {
   id: string;
+  projectId: string;
   title: string;
   content?: string;
   imageUrl: string;
@@ -85,6 +86,17 @@ export interface Project {
   description: string;
   ownerId: string;
   members: ProjectMember[];
+  createdAt: string;
+}
+
+export interface StoryInteraction {
+  id: string;
+  storyId: string;
+  userId: string;
+  userName?: string;
+  userAvatar?: string;
+  type: 'like' | 'reaction';
+  content?: string;
   createdAt: string;
 }
 

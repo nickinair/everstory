@@ -9,6 +9,7 @@ import { Project, Story, Prompt, Order, ProjectMember } from '../types';
 const MOCK_PROJECTS_KEY = 'everstory-mock-projects';
 const MOCK_STORIES_KEY = 'everstory-mock-stories';
 const MOCK_PROMPTS_KEY = 'everstory-mock-prompts';
+const MOCK_INTERACTIONS_KEY = 'everstory-mock-interactions';
 
 const isMockUser = (userId?: string) => userId?.startsWith('mock-');
 
@@ -1126,5 +1127,135 @@ export const databaseService = {
         if (profileError) throw profileError;
 
         return true;
+    },
+
+    // --- Interactions ---
+    async getStoryInteractions(storyId: string) {
+        if (storyId.startsWith('mock-')) {
+            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
+            return interactions.filter((i: any) => i.storyId === storyId);
+        }
+
+        const { data, error } = await supabase
+            .from('story_interactions')
+            .select(`
+                *,
+                user:profiles(full_name, avatar_url, phone)
+            `)
+            .eq('story_id', storyId)
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching interactions:', error);
+            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
+            return interactions.filter((i: any) => i.storyId === storyId);
+        }
+
+        return (data || []).map(i => ({
+            id: i.id,
+            storyId: i.story_id,
+            userId: i.user_id,
+            userName: i.user?.full_name || i.user?.phone || '未知用户',
+            userAvatar: i.user?.avatar_url,
+            type: i.type,
+            content: i.content,
+            createdAt: i.created_at
+        }));
+    },
+
+    async addStoryInteraction(storyId: string, type: 'like' | 'reaction', content?: string) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('未登录');
+
+        if (storyId.startsWith('mock-')) {
+            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
+            const newInteraction = {
+                id: 'mock-int-' + Date.now(),
+                storyId,
+                userId: user.id,
+                userName: user.user_metadata?.full_name || '访客',
+                type,
+                content,
+                createdAt: new Date().toISOString()
+            };
+            interactions.push(newInteraction);
+            saveMockData(MOCK_INTERACTIONS_KEY, interactions);
+            return newInteraction;
+        }
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        const { data, error } = await supabase
+            .from('story_interactions')
+            .insert({
+                story_id: storyId,
+                user_id: user.id,
+                type,
+                content
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.warn('Supabase interaction failed, using mock fallback:', error);
+            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
+            const newInteraction = {
+                id: 'mock-int-' + Date.now(),
+                storyId,
+                userId: user.id,
+                userName: profile?.full_name || user.user_metadata?.full_name || '访客',
+                userAvatar: profile?.avatar_url,
+                type,
+                content,
+                createdAt: new Date().toISOString()
+            };
+            interactions.push(newInteraction);
+            saveMockData(MOCK_INTERACTIONS_KEY, interactions);
+            return newInteraction;
+        }
+
+        return {
+            ...data,
+            userName: profile?.full_name || '我',
+            userAvatar: profile?.avatar_url
+        };
+    },
+
+    async getProjectInteractionHistory(projectId: string) {
+        if (projectId.startsWith('mock-')) {
+            // For mock, just return all interactions for now as we don't have story-project mapping easily here
+            return getMockData(MOCK_INTERACTIONS_KEY);
+        }
+
+        const { data, error } = await supabase
+            .from('story_interactions')
+            .select(`
+                *,
+                user:profiles(full_name, avatar_url, phone),
+                story:stories!inner(title, project_id)
+            `)
+            .eq('story.project_id', projectId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching interaction history:', error);
+            return getMockData(MOCK_INTERACTIONS_KEY);
+        }
+
+        return (data || []).map(i => ({
+            id: i.id,
+            storyId: i.story_id,
+            storyTitle: (i.story as any)?.title,
+            userId: i.user_id,
+            userName: i.user?.full_name || i.user?.phone || '未知用户',
+            userAvatar: i.user?.avatar_url,
+            type: i.type,
+            content: i.content,
+            createdAt: i.created_at
+        }));
     }
 };
