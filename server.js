@@ -543,10 +543,61 @@ async function callDoubaoLLM(prompt, options = {}) {
   }
 }
 
-// ASR Helper (v3 Flash / Big Model - JSON Request)
-// Uses openspeech.bytedance.com to avoid ECONNRESET issues seen with volcengine.com
+// ASR Helper (v3 Standard Big Model - JSON Request)
+// Uses V4 Signature authorization with Access Token and Secret Key.
+
+function hashSHA256(data) {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function hmacSHA256(key, data) {
+  return crypto.createHmac('sha256', key).update(data).digest();
+}
+
+function generateVolcengineAuthHeaders(method, host, path, bodyObj) {
+  const requestDate = new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '');
+  const dateStr = requestDate.substring(0, 8);
+  const region = 'cn-north-1';
+  const service = 'volc_bigasr';
+
+  // Use exact keys provided by user for ASR
+  const asrSecretKey = "Smn1LgfRocO-fojdMoo1L7kVnP8flGBB";
+  const asrAccessToken = VOLC_ASR_ACCESS_TOKEN || VOLC_ARK_API_KEY;
+
+  const bodyStr = JSON.stringify(bodyObj);
+  const bodyHash = hashSHA256(bodyStr);
+
+  const credentialScope = `${dateStr}/${region}/${service}/request`;
+  const signedHeaders = "content-type;host;x-date";
+  const canonicalRequest = `${method}\n${path}\n\ncontent-type:application/json\nhost:${host}\nx-date:${requestDate}\n\n${signedHeaders}\n${bodyHash}`;
+
+  const hashedCanonicalRequest = hashSHA256(canonicalRequest);
+  const stringToSign = `HMAC-SHA256\n${requestDate}\n${credentialScope}\n${hashedCanonicalRequest}`;
+
+  const kDate = hmacSHA256(Buffer.from(asrSecretKey, 'utf-8'), dateStr);
+  const kRegion = hmacSHA256(kDate, region);
+  const kService = hmacSHA256(kRegion, service);
+  const kSigning = hmacSHA256(kService, 'request');
+  const signature = hmacSHA256(kSigning, stringToSign).toString('hex');
+
+  const authorization = `HMAC-SHA256 Credential=${asrAccessToken}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return {
+    'Content-Type': 'application/json',
+    'Host': host,
+    'X-Date': requestDate,
+    'Authorization': authorization,
+    'X-Api-App-Key': VOLC_ASR_APP_ID,
+    'X-Api-Resource-Id': 'volc.seedasr.auc',
+    'X-Api-Connect-Id': crypto.randomUUID(),
+    'X-Api-Request-Id': crypto.randomUUID()
+  };
+}
+
 async function callDoubaoASR(base64Data, mimeType) {
-  const url = 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
+  const host = 'openspeech.bytedance.com';
+  const submitPath = '/api/v3/auc/bigmodel/submit';
+  const queryPath = '/api/v3/auc/bigmodel/query';
 
   if (!VOLC_ARK_API_KEY || !VOLC_ASR_APP_ID) {
     throw new Error('Volcengine ASR configuration missing');
@@ -555,43 +606,81 @@ async function callDoubaoASR(base64Data, mimeType) {
   console.log(`[Doubao ASR] Initiating v3 request - AppId: ${VOLC_ASR_APP_ID}`);
 
   try {
-    // Determine the active access key specifically for ASR
-    const asrAccessKey = VOLC_ASR_ACCESS_TOKEN || VOLC_ARK_API_KEY;
-
-    const res = await axios.post(
-      url,
-      {
-        user: { uid: 'everstory_user' },
-        audio: {
-          format: 'wav',
-          data: base64Data
-        },
-        request: {
-          model_name: 'built-in-model'
-        }
+    const submitBody = {
+      user: { uid: 'everstory_user' },
+      audio: {
+        format: mimeType.includes('webm') ? 'webm' : (mimeType.includes('mp4') ? 'mp4' : 'wav'),
+        data: base64Data
       },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-App-Key': VOLC_ASR_APP_ID,
-          'X-Api-Access-Key': asrAccessKey,
-          'X-Api-Resource-Id': 'volc.bigasr.auc_turbo', // Required for Turbo ASR
-          'X-Api-Connect-Id': crypto.randomUUID(),
-          'X-Api-Request-Id': crypto.randomUUID(),     // Fix: Missing basicHttpRoutingPreference
-          'X-Api-Sequence': -1                         // Fix: Complete requirement for Flash API
-        }
+      request: {
+        model_name: 'bigmodel'
       }
+    };
+
+    const submitHeaders = generateVolcengineAuthHeaders('POST', host, submitPath, submitBody);
+
+    const submitRes = await axios.post(
+      `https://${host}${submitPath}`,
+      submitBody,
+      { headers: submitHeaders }
     );
 
-    console.log('[Doubao ASR] Response Code:', res.data?.code);
+    console.log('[Doubao ASR] Submit Code:', submitRes.data?.resp?.code);
 
-    if (res.data?.code !== 1000 && res.data?.code !== 0) {
-      console.error('[Doubao ASR] Error details:', res.data);
-      throw new Error(res.data?.message || `ASR API error (code: ${res.data?.code})`);
+    if (submitRes.data?.resp?.code !== 1000) {
+      console.error('[Doubao ASR] Submit Error details:', submitRes.data);
+      throw new Error(submitRes.data?.resp?.message || `ASR Submit error`);
     }
 
-    // Result path for v3:
-    return res.data.result?.text || res.data.text || "";
+    const jobId = submitRes.data.resp.id;
+    console.log(`[Doubao ASR] Job submitted. ID: ${jobId}. Starting polling...`);
+
+    // Poll for the result
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const maxAttempts = 60; // 2 minutes max
+
+      const poll = async () => {
+        attempts++;
+        try {
+          const queryBody = {
+            user: { uid: 'everstory_user' },
+            request: { model_name: "bigmodel" },
+            resp: { id: jobId }
+          };
+          const queryHeaders = generateVolcengineAuthHeaders('POST', host, queryPath, queryBody);
+
+          const queryRes = await axios.post(
+            `https://${host}${queryPath}`,
+            queryBody,
+            { headers: queryHeaders }
+          );
+
+          const code = queryRes.data?.resp?.code;
+
+          if (code === 1000) {
+            // Success!
+            console.log(`[Doubao ASR] Job ${jobId} finished.`);
+            resolve(queryRes.data.resp.text || "");
+          } else if (code === 2000) {
+            if (attempts >= maxAttempts) {
+              reject(new Error("ASR Polling timeout"));
+            } else {
+              // Still processing
+              setTimeout(poll, 2000);
+            }
+          } else {
+            reject(new Error(`ASR Query failed with code ${code}: ${queryRes.data?.resp?.message}`));
+          }
+        } catch (err) {
+          reject(new Error(err.response?.data?.message || err.message));
+        }
+      };
+
+      // Initial wait before first poll
+      setTimeout(poll, 2000);
+    });
+
   } catch (error) {
     console.error('[Doubao ASR] Request failed:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || error.message || 'ASR Request failed');
