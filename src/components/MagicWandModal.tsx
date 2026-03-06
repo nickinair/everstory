@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Sparkles, Plus, Loader2, Check } from 'lucide-react';
-import { generateGuidedPrompts } from '../services/geminiService';
+import { generateGuidedPrompts } from '../services/aiService';
 
 interface MagicWandModalProps {
     isOpen: boolean;

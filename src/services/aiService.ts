@@ -1,4 +1,4 @@
-// Refactored to use backend proxy to secure API keys
+// AI Service with backend proxy to secure API keys
 const API_BASE_URL = ''; // Relative to the host
 
 async function callAIProxy(action: string, payload: any) {
@@ -18,8 +18,6 @@ async function callAIProxy(action: string, payload: any) {
   const data = await response.json();
   return data.result;
 }
-
-// Retry logic is now handled in the backend
 
 export async function generateStoryFromMedia(base64Data: string, mimeType: string) {
   const prompt = `请根据上传的媒体内容（图片或视频），提取其中的关键内容，并生成：
@@ -46,7 +44,7 @@ export async function generateStoryFromMedia(base64Data: string, mimeType: strin
 
     const cleanText = resultText.trim();
 
-    // Use regex to extract JSON if Gemini wraps it in markdown code blocks
+    // Extract JSON if wrapped in markdown code blocks
     const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
@@ -76,7 +74,7 @@ export async function transcribeMedia(base64Data: string, mimeType: string) {
       prompt
     });
 
-    console.log("Raw Gemini transcription output:", resultText);
+    console.log("Raw transcription output:", resultText);
     return resultText.trim();
   } catch (error) {
     console.error("Transcription error:", error);
@@ -143,9 +141,10 @@ export async function generateGuidedPrompts(role: string, profession: string, ke
     });
 
     // Split by newline and filter out empty lines
-    return resultText.split("\n").map((s: string) => s.trim().replace(/^\d+\.\s*/, "")).filter((s: string) => s.length > 0).slice(0, 5);
+    return (resultText || "").split("\n").map((s: string) => s.trim().replace(/^\d+\.\s*/, "")).filter((s: string) => s.length > 0).slice(0, 5);
   } catch (error) {
     console.error("Generate prompts error:", error);
     throw error;
   }
 }
+

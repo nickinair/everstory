@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Prompt } from '../types';
 import { databaseService } from '../services/databaseService';
-import { transcribeMedia } from '../services/geminiService';
+import { transcribeMedia } from '../services/aiService';
 
 interface RecordingFlowProps {
   projectId: string;

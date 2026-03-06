@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Upload, Image as ImageIcon, Video, X, Wand2, Save, Loader2 } from 'lucide-react';
-import { generateStoryFromMedia, transcribeMedia } from '../services/geminiService';
+import { generateStoryFromMedia, transcribeMedia } from '../services/aiService';
 import { databaseService } from '../services/databaseService';
 
 interface AddStoryViewProps {

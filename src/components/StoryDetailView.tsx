@@ -35,7 +35,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Story, Prompt, ProjectMember } from '../types';
 import { databaseService } from '../services/databaseService';
-import { transcribeMedia, optimizeStoryContent } from '../services/geminiService';
+import { transcribeMedia, optimizeStoryContent } from '../services/aiService';
 import BookLoader from './BookLoader';
 
 interface StoryDetailViewProps {
