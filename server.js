@@ -495,7 +495,6 @@ const VOLC_ASR_ACCESS_TOKEN = process.env.VOLC_ASR_ACCESS_TOKEN; // Different to
 
 import axios from 'axios';
 import FormData from 'form-data';
-import crypto from 'crypto';
 
 // LLM Helper (OpenAI compatible API with Volcengine)
 // Reference used from user snippet: axios.post to ark.cn-beijing.volces.com/api/v3/chat/completions
