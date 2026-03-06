@@ -79,7 +79,9 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, type, isOwner
                             </div>
 
                             <div className="space-y-4 mb-10 bg-gray-50/50 p-6 rounded-2xl border border-gray-100/50">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">订购即可获得</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
+                                    {isOwner ? '订购即可获得' : '该项目所有者订购即可获得'}
+                                </p>
                                 <div className="grid grid-cols-1 gap-3">
                                     {benefits.map((benefit, idx) => (
                                         <div key={idx} className="flex items-center text-sm text-gray-700">
