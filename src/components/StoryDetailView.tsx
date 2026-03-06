@@ -436,7 +436,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                       }
                     }}
                   />
-                  {(story.type === 'audio' && !story.imageUrl) && (
+                  {story.type === 'audio' && (
                     <audio
                       key={story.videoUrl}
                       ref={mediaRef as React.RefObject<HTMLAudioElement>}
