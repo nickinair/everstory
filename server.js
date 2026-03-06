@@ -577,7 +577,7 @@ app.post('/api/ai/process', async (req, res) => {
   const { action, payload } = req.body;
 
   try {
-    console.log(`[Proxy] AI Action: ${action}`);
+    console.log(`[Doubao] AI Action: ${action}`);
     let result;
     switch (action) {
       case 'generateStory':
@@ -598,7 +598,7 @@ app.post('/api/ai/process', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    console.error(`[Proxy] Doubao Error (${action}):`, error);
+    console.error(`[Doubao] Error (${action}):`, error);
     res.status(500).json({ error: error.message || 'AI processing failed' });
   }
 });
