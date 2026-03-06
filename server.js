@@ -533,50 +533,53 @@ async function callDoubaoLLM(prompt, options = {}) {
   }
 }
 
-// ASR Helper (Short Audio - using v1/recognize with multipart/form-data)
-// Reference used from user snippet: axios.post with form-data to openspeech.bytedance.com/api/v1/recognize
+// ASR Helper (v3 Flash / Big Model - JSON Request)
+// Uses openspeech.bytedance.com to avoid ECONNRESET issues seen with volcengine.com
 async function callDoubaoASR(base64Data, mimeType) {
-  const url = 'https://openspeech.bytedance.com/api/v1/recognize';
+  const url = 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash';
 
   if (!VOLC_ARK_API_KEY || !VOLC_ASR_APP_ID) {
-    throw new Error('Volcengine ASR configuration (API Key or AppID) missing');
+    throw new Error('Volcengine ASR configuration missing');
   }
 
-  console.log(`[Doubao ASR] Initiating v1 request - AppId: ${VOLC_ASR_APP_ID}`);
+  console.log(`[Doubao ASR] Initiating v3 request - AppId: ${VOLC_ASR_APP_ID}`);
 
   try {
-    // Convert base64 back to buffer
-    const buffer = Buffer.from(base64Data, 'base64');
-
-    // Create form-data instance correctly for Node (using the form-data package)
-    const formData = new FormData();
-    // Append the buffer directly, specifying a filename is required to simulate a file upload in axios
-    formData.append('audio', buffer, { filename: 'audio.wav', contentType: 'audio/wav' });
-    formData.append('appid', VOLC_ASR_APP_ID);
-    formData.append('language', 'zh-CN');
-
     const res = await axios.post(
       url,
-      formData,
+      {
+        user: { uid: 'everstory_user' },
+        audio: {
+          format: 'wav',
+          data: base64Data
+        },
+        request: {
+          model_name: 'built-in-model'
+        }
+      },
       {
         headers: {
-          'Authorization': `Bearer ${VOLC_ARK_API_KEY}`,
-          ...formData.getHeaders()
+          'Content-Type': 'application/json',
+          'X-Api-App-Key': VOLC_ASR_APP_ID,
+          'X-Api-Access-Key': VOLC_ARK_API_KEY,
+          'X-Api-Resource-Id': 'volc.bigasr.auc_turbo', // Required for Turbo ASR
+          'X-Api-Connect-Id': crypto.randomUUID()
         }
       }
     );
 
     console.log('[Doubao ASR] Response Code:', res.data?.code);
 
-    if (res.data?.code !== 1000) {
+    if (res.data?.code !== 1000 && res.data?.code !== 0) {
+      console.error('[Doubao ASR] Error details:', res.data);
       throw new Error(res.data?.message || `ASR API error (code: ${res.data?.code})`);
     }
 
-    // Extract text from standard Doubao v1/recognize response
-    return res.data.text || (res.data.result && res.data.result.text) || "";
+    // Result path for v3:
+    return res.data.result?.text || res.data.text || "";
   } catch (error) {
     console.error('[Doubao ASR] Request failed:', error.response?.data || error.message);
-    throw error;
+    throw new Error(error.response?.data?.message || error.message || 'ASR Request failed');
   }
 }
 
