@@ -255,7 +255,7 @@ export default function AuthView() {
                             </div>
                         )}
 
-                        <div className="text-center mb-6">
+                        <div className={`text-center mb-6 ${mode === 'login' ? 'mt-12' : ''}`}>
                             <h1 className="text-4xl font-serif text-gray-800 mb-1 font-light tracking-[0.3em] pl-[0.3em]">长生記</h1>
                             <p className="text-[13px] text-gray-400 tracking-[0.1em] uppercase">
                                 录制属于你的传记
