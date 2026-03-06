@@ -631,7 +631,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                 className="fixed lg:absolute bottom-0 right-0 w-full bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)] z-[70] flex flex-col rounded-t-3xl overflow-hidden"
-                style={{ height: '61.8%' }}
+                style={{ height: '69%' }}
               >
                 <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                   <div className="flex items-center space-x-2">

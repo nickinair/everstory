@@ -554,9 +554,10 @@ async function callDoubaoLLM(prompt, options = {}) {
 // ASR Helper (v1 Standard Synchronous API - Form-Data Request)
 
 const VOLC_CONFIG = {
-  APP_ID: process.env.VOLC_ASR_APP_ID || "4913475888",
-  ACCESS_TOKEN: process.env.VOLC_ASR_ACCESS_TOKEN || "_dP8O_d0V2jW-imybWKh71sbO0lMSn82",
-  SYNC_API: 'https://openspeech.bytedance.com/api/v1/recognize'
+  // Use V3 BigModel configs from env
+  API_KEY: process.env.VOLC_ASR_API_KEY || "b2b0f9e5-657d-441d-9a73-7907d470cda4",
+  RESOURCE_ID_FLASH: "volc.bigasr.auc_turbo",
+  FLASH_API: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash'
 };
 
 async function convertAudioToWav(inputPath, outputPath) {
@@ -589,24 +590,44 @@ async function callDoubaoASR(base64Data, mimeType) {
     await convertAudioToWav(tempInputPath, tempOutputPath);
     console.log(`[Doubao ASR] ✅ Audio converted successfully: ${tempOutputPath}`);
 
-    // 3. Build FormData payload using the converted WAV
-    const formData = new FormData();
-    formData.append('appid', VOLC_CONFIG.APP_ID);
-    formData.append('language', 'zh-CN');
-    formData.append('format', 'wav');
-    formData.append('audio', fs.createReadStream(tempOutputPath));
+    // 3. Instead of form-data, encode the converted WAV to base64 for V3 BigModel API
+    const wavBuffer = fs.readFileSync(tempOutputPath);
+    const base64Audio = wavBuffer.toString('base64');
 
-    // 4. Send Request
-    console.log("[Doubao ASR] 🔹 发送标准WAV录音至火山 V1 同步识别接口...");
-    const response = await axios.post(VOLC_CONFIG.SYNC_API, formData, {
-      headers: {
-        'Authorization': `Bearer ${VOLC_CONFIG.ACCESS_TOKEN}`,
-        ...formData.getHeaders(),
+    const payload = {
+      user: { uid: `user_${Date.now()}` },
+      audio: {
+        data: base64Audio,
+        format: 'wav',
       },
-    });
+      request: {
+        model_name: "bigmodel",
+        enable_itn: true
+      }
+    };
 
-    if (response.data.code === 0) {
-      const finalText = response.data.data.text || response.data.data.sentences?.map((s) => s.text).join('') || '';
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Api-Key': VOLC_CONFIG.API_KEY,
+      'X-Api-Resource-Id': VOLC_CONFIG.RESOURCE_ID_FLASH,
+      'X-Api-Request-Id': crypto.randomUUID(),
+      'X-Api-Sequence': '-1'
+    };
+
+    // 4. Send Request directly to V3 flash endpoint
+    console.log("[Doubao ASR] 🔹 发送标准WAV录音至火山 V3 极速版大模型...");
+    const response = await axios.post(VOLC_CONFIG.FLASH_API, payload, { headers });
+
+    // Status code extraction
+    const statusCode = response.headers['x-api-status-code'];
+    const msg = response.headers['x-api-message'];
+
+    if (statusCode && !statusCode.startsWith('2')) {
+      throw new Error(`Volc API Error: [${statusCode}] ${msg}`);
+    }
+
+    if (response.data && response.data.result) {
+      const finalText = response.data.result.text || '';
       console.log(`[Doubao ASR] ✅ 识别成功，文本长度：${finalText.length}字`);
 
       // Cleanup
@@ -615,7 +636,7 @@ async function callDoubaoASR(base64Data, mimeType) {
 
       return finalText;
     } else {
-      throw new Error(`Volc API Error: ${response.data.message || JSON.stringify(response.data)}`);
+      throw new Error(`Volc API Error: 无返回文本, Response: ${JSON.stringify(response.data)}`);
     }
 
   } catch (error) {
