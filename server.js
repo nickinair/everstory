@@ -500,18 +500,26 @@ import FormData from 'form-data';
 async function callDoubaoLLM(prompt, options = {}) {
   const url = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
 
-  if (!VOLC_ARK_API_KEY || !VOLC_ARK_ENDPOINT_ID) {
-    throw new Error('Volcengine LLM configuration missing');
+  // The endpoint ID might have been misconfigured to the API Key in .env.
+  // Fallback to the standard Doubao model if it looks like a generic UUID API Key or is missing.
+  let validEndpointId = VOLC_ARK_ENDPOINT_ID;
+  if (!validEndpointId || validEndpointId === VOLC_ARK_API_KEY) {
+    validEndpointId = 'doubao-1-5-pro-32k-250115';
   }
 
-  console.log(`[Doubao LLM] Request with endpoint: ${VOLC_ARK_ENDPOINT_ID}`);
+  if (!VOLC_ARK_API_KEY) {
+    throw new Error('Volcengine API Key missing');
+  }
+
+  console.log(`[Doubao LLM] Request with endpoint: ${validEndpointId}`);
 
   try {
     const res = await axios.post(
       url,
       {
-        model: VOLC_ARK_ENDPOINT_ID,
+        model: validEndpointId,
         messages: [
+          { role: 'system', content: '你是人工智能助手.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
