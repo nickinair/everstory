@@ -492,7 +492,11 @@ const VOLC_ARK_API_KEY = process.env.VOLC_ARK_API_KEY;
 const VOLC_ARK_ENDPOINT_ID = process.env.VOLC_ARK_ENDPOINT_ID;
 const VOLC_ASR_APP_ID = process.env.VOLC_ASR_APP_ID;
 
-// LLM Helper (OpenAI compatible)
+import axios from 'axios';
+import FormData from 'form-data';
+
+// LLM Helper (OpenAI compatible API with Volcengine)
+// Reference used from user snippet: axios.post to ark.cn-beijing.volces.com/api/v3/chat/completions
 async function callDoubaoLLM(prompt, options = {}) {
   const url = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
 
@@ -500,75 +504,78 @@ async function callDoubaoLLM(prompt, options = {}) {
     throw new Error('Volcengine LLM configuration missing');
   }
 
-  console.log(`[LLM] Request with endpoint: ${VOLC_ARK_ENDPOINT_ID}`);
+  console.log(`[Doubao LLM] Request with endpoint: ${VOLC_ARK_ENDPOINT_ID}`);
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${VOLC_ARK_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: VOLC_ARK_ENDPOINT_ID,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-      ...options
-    })
-  });
+  try {
+    const res = await axios.post(
+      url,
+      {
+        model: VOLC_ARK_ENDPOINT_ID,
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
+        ...options
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${VOLC_ARK_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
-  const data = await response.json();
-  if (!response.ok) {
-    console.error('[LLM] Error:', JSON.stringify(data));
-    throw new Error(data.error?.message || 'Doubao Ark API request failed');
+    return res.data.choices[0].message.content;
+  } catch (err) {
+    console.error('[Doubao LLM] Error:', err.response?.data || err.message);
+    throw new Error(err.response?.data?.error?.message || 'Doubao Ark API request failed');
   }
-  return data.choices[0].message.content;
 }
 
-// ASR Helper (Based on user-provided reference v1/recognize)
+// ASR Helper (Short Audio - using v1/recognize with multipart/form-data)
+// Reference used from user snippet: axios.post with form-data to openspeech.bytedance.com/api/v1/recognize
 async function callDoubaoASR(base64Data, mimeType) {
-  // Reference endpoint: https://openspeech.bytedance.com/api/v1/recognize
   const url = 'https://openspeech.bytedance.com/api/v1/recognize';
 
   if (!VOLC_ARK_API_KEY || !VOLC_ASR_APP_ID) {
     throw new Error('Volcengine ASR configuration (API Key or AppID) missing');
   }
 
-  console.log(`[ASR] Initiating v1 request - AppId: ${VOLC_ASR_APP_ID}`);
+  console.log(`[Doubao ASR] Initiating v1 request - AppId: ${VOLC_ASR_APP_ID}`);
 
   try {
-    // Convert base64 to buffer for multipart upload
+    // Convert base64 back to buffer
     const buffer = Buffer.from(base64Data, 'base64');
 
-    // We use standard FormData which is available in Node 18+
+    // Create form-data instance correctly for Node (using the form-data package)
     const formData = new FormData();
-    // In Node fetch, we can append a Blob
-    const blob = new Blob([buffer], { type: 'audio/wav' });
-    formData.append('audio', blob, 'audio.wav');
+    // Append the buffer directly, specifying a filename is required to simulate a file upload in axios
+    formData.append('audio', buffer, { filename: 'audio.wav', contentType: 'audio/wav' });
     formData.append('appid', VOLC_ASR_APP_ID);
     formData.append('language', 'zh-CN');
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${VOLC_ARK_API_KEY}`
-        // Content-Type is set automatically for FormData
-      },
-      body: formData
-    });
+    const res = await axios.post(
+      url,
+      formData,
+      {
+        headers: {
+          'Authorization': `Bearer ${VOLC_ARK_API_KEY}`,
+          ...formData.getHeaders()
+        }
+      }
+    );
 
-    const data = await response.json();
-    console.log('[ASR] Response:', JSON.stringify(data));
+    console.log('[Doubao ASR] Response Code:', res.data?.code);
 
-    if (!response.ok || data.code !== 1000) {
-      throw new Error(data.message || `ASR API error (code: ${data.code})`);
+    if (res.data?.code !== 1000) {
+      throw new Error(res.data?.message || `ASR API error (code: ${res.data?.code})`);
     }
 
-    return data.text || (data.result && data.result.text) || "";
+    // Extract text from standard Doubao v1/recognize response
+    return res.data.text || (res.data.result && res.data.result.text) || "";
   } catch (error) {
-    console.error('[ASR] Request failed:', error);
+    console.error('[Doubao ASR] Request failed:', error.response?.data || error.message);
     throw error;
   }
 }
