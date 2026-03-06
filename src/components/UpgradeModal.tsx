@@ -6,15 +6,21 @@ interface UpgradeModalProps {
     onClose: () => void;
     onUpgrade: () => void;
     type: 'prompts' | 'stories' | 'projects' | 'order-required';
+    isOwner?: boolean;
 }
 
-export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: UpgradeModalProps) {
+export default function UpgradeModal({ isOpen, onClose, onUpgrade, type, isOwner = true }: UpgradeModalProps) {
     const title = type === 'order-required' ? '立即订购解锁更多' : type === 'prompts' ? '提示数量已达上限' : type === 'stories' ? '故事数量已达上限' : '项目数量已达上限';
-    const description =
-        type === 'order-required' ? '您已完成书籍预览。立即订购即可继续定制您的定制精装传记，永久保存这份珍贵记忆。' :
+
+    let description = '';
+    if (!isOwner) {
+        description = '项目所有者为免费版，目前仅支持创建 10 个故事。立即升级即可解锁无限篇幅记录，永久保存您的珍贵人生。';
+    } else {
+        description = type === 'order-required' ? '您已完成书籍预览。立即订购即可继续定制您的定制精装传记，永久保存这份珍贵记忆。' :
             type === 'prompts' ? '免费版目前仅支持创建 10 个提示。立即升级即可解锁无限次提示引导，为您开启深度回忆之旅。' :
                 type === 'stories' ? '免费版目前仅支持手动创建 10 个故事。立即升级即可解锁无限篇幅记录，永久保存您的珍贵人生。' :
                     '免费版目前仅支持创建 2 个项目。立即升级即可开启更多家人的传记项目，记录完整家族记忆。';
+    }
 
     const benefits = [
         '无限次数故事录制',
@@ -87,22 +93,33 @@ export default function UpgradeModal({ isOpen, onClose, onUpgrade, type }: Upgra
                             </div>
 
                             <div className="flex flex-col space-y-3">
-                                <button
-                                    onClick={() => {
-                                        onUpgrade();
-                                        onClose();
-                                    }}
-                                    className="w-full py-4 bg-accent hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2 group cursor-pointer"
-                                >
-                                    <span>立即订购解锁</span>
-                                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                </button>
-                                <button
-                                    onClick={onClose}
-                                    className="w-full py-4 bg-white text-gray-500 rounded-2xl font-bold hover:bg-gray-50 transition-colors cursor-pointer"
-                                >
-                                    稍后再说
-                                </button>
+                                {isOwner ? (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                onUpgrade();
+                                                onClose();
+                                            }}
+                                            className="w-full py-4 bg-accent hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2 group cursor-pointer"
+                                        >
+                                            <span>立即订购解锁</span>
+                                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                        </button>
+                                        <button
+                                            onClick={onClose}
+                                            className="w-full py-4 bg-white text-gray-500 rounded-2xl font-bold hover:bg-gray-50 transition-colors cursor-pointer"
+                                        >
+                                            稍后再说
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={onClose}
+                                        className="w-full py-4 bg-accent hover:bg-teal-700 text-white rounded-2xl font-bold shadow-lg shadow-accent/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                                    >
+                                        知道了
+                                    </button>
+                                )}
                             </div>
 
                             <div className="mt-8 flex items-center justify-center space-x-1.5 text-[10px] text-gray-400 font-medium uppercase tracking-widest opacity-60">

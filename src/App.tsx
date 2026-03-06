@@ -1041,6 +1041,7 @@ export default function App() {
         onClose={() => setIsUpgradeModalOpen(false)}
         onUpgrade={() => setCurrentView('buy-now')}
         type={upgradeModalType}
+        isOwner={currentProject?.ownerId === currentUser?.id}
       />
 
       <InviteModal
