@@ -75,8 +75,8 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   const [duration, setDuration] = useState(0);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
 
-  // Interactions State
   const [interactions, setInteractions] = useState<StoryInteraction[]>([]);
+  const [projectInteractionsCount, setProjectInteractionsCount] = useState(0);
   const [isInteractionPopoverOpen, setIsInteractionPopoverOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [interactionHistory, setInteractionHistory] = useState<(StoryInteraction & { storyTitle: string })[]>([]);
@@ -145,14 +145,18 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   useEffect(() => {
     const fetchInteractions = async () => {
       try {
-        const data = await databaseService.getStoryInteractions(story.id);
-        setInteractions(data);
+        const [storyData, projectData] = await Promise.all([
+          databaseService.getStoryInteractions(story.id),
+          databaseService.getProjectInteractionHistory(story.projectId)
+        ]);
+        setInteractions(storyData);
+        setProjectInteractionsCount(projectData.length);
       } catch (err) {
         console.error('Failed to fetch interactions:', err);
       }
     };
     fetchInteractions();
-  }, [story.id]);
+  }, [story.id, story.projectId]);
 
   const fetchHistory = async () => {
     try {
@@ -180,9 +184,13 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
         await databaseService.addStoryInteraction(story.id, 'reaction', reaction);
       }
 
-      // Refresh interactions - this will update the derived 'hasUserLiked'
-      const updated = await databaseService.getStoryInteractions(story.id);
-      setInteractions(updated);
+      // Refresh interactions
+      const [updatedStory, updatedProject] = await Promise.all([
+        databaseService.getStoryInteractions(story.id),
+        databaseService.getProjectInteractionHistory(story.projectId)
+      ]);
+      setInteractions(updatedStory);
+      setProjectInteractionsCount(updatedProject.length);
 
       // Animation and feedback
       setShowHeartAnimation(true);
@@ -694,7 +702,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   >
                     <Heart className={`w-5 h-5 lg:w-6 lg:h-6 ${hasUserLiked ? 'text-red-400 fill-red-400' : 'text-gray-400 group-hover:text-red-500'} mb-1 lg:mb-1.5`} />
                     <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">
-                      互动 {interactions.length > 0 && `(${interactions.length})`}
+                      互动 {projectInteractionsCount > 0 && `(${projectInteractionsCount})`}
                     </span>
                   </button>
 
