@@ -17,7 +17,7 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video' | 'audio' | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,12 +75,17 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
     const file = e.target.files?.[0];
     if (file) {
       setMediaFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setMediaPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-      setMediaType(file.type.startsWith('video/') ? 'video' : 'image');
+      if (file.type.startsWith('audio/')) {
+        setMediaType('audio');
+        setMediaPreview('/audio_cover.png');
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setMediaPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        setMediaType(file.type.startsWith('video/') ? 'video' : 'image');
+      }
     }
   };
 
@@ -88,14 +93,22 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
     if (!mediaPreview || !mediaFile) return;
 
     setIsGenerating(true);
-    setContent('AI 正在由视频生成文字...');
+    setContent('AI 正在由媒体生成文字...');
     try {
-      const base64Data = mediaPreview.split(',')[1];
+      // For images, we need base64 for vision. For audio/video, we might need different handling
+      // depending on transcribeMedia implementation.
 
-      if (mediaType === 'video') {
+      if (mediaType === 'audio' || mediaType === 'video') {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(mediaFile);
+        });
+        const base64Data = await base64Promise;
         const text = await transcribeMedia(base64Data, mediaFile.type);
         if (text) setContent(text);
-      } else {
+      } else if (mediaPreview) {
+        const base64Data = mediaPreview.split(',')[1];
         const result = await generateStoryFromMedia(base64Data, mediaFile.type);
         if (result) {
           if (result.title) setTitle(result.title);
@@ -140,6 +153,11 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
 
         // Fallback: if thumbnail failed, use video URL as placeholder (though not ideal)
         if (!finalImageUrl) finalImageUrl = videoUrl;
+      } else if (mediaType === 'audio') {
+        const timestamp = Date.now();
+        // Upload Audio to videoUrl field (consistent with recording flow)
+        videoUrl = await databaseService.uploadMedia(mediaFile, `projects/${projectId}/stories/audio_${timestamp}_${mediaFile.name}`);
+        finalImageUrl = '/audio_cover.png';
       } else {
         // Just upload image
         const timestamp = Date.now();
@@ -152,7 +170,7 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
         content: content,
         imageUrl: finalImageUrl,
         videoUrl: videoUrl || undefined,
-        type: mediaType === 'video' ? 'video' : 'image',
+        type: mediaType === 'image' ? 'image' : (mediaType === 'video' ? 'video' : 'audio'),
       });
 
       alert('故事保存成功！');
@@ -243,7 +261,7 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept="image/*,video/*"
+                  accept="image/*,video/*,audio/*"
                   className="hidden"
                 />
               </div>
