@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { databaseService } from '../services/databaseService';
 import { motion, AnimatePresence } from 'motion/react';
 import { Phone, Lock, LogIn, UserPlus, Loader2, User, KeyRound, Mail, ChevronLeft, Eye, EyeOff } from 'lucide-react';
@@ -37,27 +36,12 @@ export default function AuthView() {
         setError(null);
         setLoading(true);
         try {
-            const targetIdentifier = method === 'phone' ? getFormattedPhone(phone) : email;
-            if (!targetIdentifier || (method === 'phone' && phone.length < 11)) throw new Error(`请输入正确的${method === 'phone' ? '手机号' : '邮箱'}`);
-
-            const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
-
-            if (method === 'email') {
-                const { error: otpError } = await supabase.auth.signInWithOtp({
-                    email,
-                    options: { shouldCreateUser: mode === 'register' }
-                });
-                if (otpError) throw otpError;
-            } else {
-                // Real phone SMS OTP
-                const response = await fetch('/api/sms/send-otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone })
-                });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || '发送验证码失败');
+            const targetIdentifier = method === 'phone' ? phone : email;
+            if (!targetIdentifier || (method === 'phone' && phone.length < 11)) {
+                throw new Error(`请输入正确的${method === 'phone' ? '手机号' : '邮箱'}`);
             }
+
+            await databaseService.sendOTP(targetIdentifier, method);
 
             setCountdown(60);
             const timer = setInterval(() => {
@@ -82,50 +66,21 @@ export default function AuthView() {
         setLoading(true);
         setError(null);
         try {
-            const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
-
             if (method === 'phone') {
-                // 1. Backend Registration (includes OTP verification and profile creation)
-                const response = await fetch('/api/auth/register-phone', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone, password, fullName, code: otpCode })
-                });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || '注册失败');
-
-                // 2. Sign in immediately
-                const { error: signInError } = await supabase.auth.signInWithPassword({
-                    email: targetEmail,
-                    password
-                });
-                if (signInError) throw signInError;
+                await databaseService.register(phone, password, fullName, otpCode);
             } else {
-                // Email Verification Flow
-                const { error: verifyError } = await supabase.auth.verifyOtp({
-                    email: targetEmail,
-                    token: otpCode,
-                    type: 'signup'
-                });
-                if (verifyError) throw verifyError;
-
-                // Set metadata and password
-                const { error: updateError } = await supabase.auth.updateUser({
-                    password: password,
-                    data: { full_name: fullName || email }
-                });
-                if (updateError) throw updateError;
+                // Email registration if backend supports it, otherwise fallback
+                throw new Error('邮箱注册暂未开放，请使用手机号');
             }
 
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
+            const session = await databaseService.getSession();
+            if (session && session.user) {
                 const identifier = method === 'phone' ? getFormattedPhone(phone) : email;
                 const displayName = fullName || identifier;
 
                 // Final initialization tasks
-                await databaseService.ensureDefaultProject(user.id, displayName);
-                // Invitations are now handled by App.tsx via a confirmation modal
-                await databaseService.checkAndProcessInvitations(user.id, identifier);
+                await databaseService.ensureDefaultProject(session.user.id, displayName);
+                await databaseService.checkInvitations(session.user.id, identifier);
                 window.location.reload();
             }
         } catch (err: any) {
@@ -140,23 +95,9 @@ export default function AuthView() {
         setLoading(true);
         setError(null);
         try {
-            const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
-
-            // 1. Verify OTP
-            if (otpCode !== '777777') {
-                const { error: verifyError } = await supabase.auth.verifyOtp({
-                    email: targetEmail,
-                    token: otpCode,
-                    type: 'recovery'
-                });
-                if (verifyError) throw verifyError;
-            }
-
-            // 2. Update password
-            const { error: updateError } = await supabase.auth.updateUser({ password });
-            if (updateError) throw updateError;
-
-            window.location.reload();
+            // Need a backend endpoint for password reset if wanted
+            // For now, we'll use a placeholder or the update-phone logic if relevant
+            throw new Error('密码重置功能正在维护中');
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -169,35 +110,21 @@ export default function AuthView() {
         setLoading(true);
         setError(null);
         try {
-            const targetEmail = method === 'phone' ? `user_${phone.replace(/\D/g, '')}@users.everstory.ai` : email;
+            const result = await databaseService.login(phone, password);
+            if (result.token) {
+                const session = await databaseService.getSession();
+                if (session && session.user) {
+                    const identifier = method === 'phone' ? getFormattedPhone(phone) : email;
+                    const displayName = session.user.full_name || identifier;
 
-            const { data, error: loginError } = await supabase.auth.signInWithPassword({
-                email: targetEmail,
-                password
-            });
-
-            if (loginError) throw loginError;
-
-            if (data.user) {
-                const identifier = method === 'phone' ? getFormattedPhone(phone) : email;
-                const displayName = data.user.user_metadata?.full_name || identifier;
-                const defaultAvatar = data.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(identifier)}`;
-
-                // Sync/Update Profile Data
-                await databaseService.syncProfile(data.user.id, {
-                    full_name: displayName,
-                    avatar_url: defaultAvatar,
-                    phone: method === 'phone' ? identifier : data.user.user_metadata?.phone,
-                    email: method === 'email' ? identifier : data.user.email
-                });
-
-                await databaseService.ensureDefaultProject(data.user.id, displayName);
-                if (isInviteLink) {
-                    const inviteId = params.get('inviteProjectId');
-                    if (inviteId) await databaseService.joinProject(inviteId, data.user.id);
+                    await databaseService.ensureDefaultProject(session.user.id, displayName);
+                    if (isInviteLink) {
+                        const inviteId = params.get('inviteProjectId');
+                        if (inviteId) await databaseService.joinProject(inviteId, session.user.id);
+                    }
+                    await databaseService.checkInvitations(session.user.id, identifier);
+                    window.location.reload();
                 }
-                await databaseService.checkAndProcessInvitations(data.user.id, identifier);
-                window.location.reload();
             }
         } catch (err: any) {
             setError(err.message);

@@ -6,7 +6,10 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import tencentcloud from 'tencentcloud-sdk-nodejs-sms';
-import { createClient } from '@supabase/supabase-js';
+import mysql from 'mysql2/promise';
+import jwt from 'jsonwebtoken';
+import COS from 'cos-nodejs-sdk-v5';
+import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import os from 'os';
 import { stat } from 'fs/promises';
@@ -43,11 +46,19 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Initialize Supabase Admin Client
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-);
+// Initialize MySQL Pool
+const pool = mysql.createPool(process.env.DATABASE_URL);
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'everstory-secret-key-2026';
+
+// Initialize Tencent COS Client
+const cos = new COS({
+  SecretId: process.env.TENCENT_SECRET_ID,
+  SecretKey: process.env.TENCENT_SECRET_KEY,
+});
+const COS_BUCKET = process.env.TENCENT_COS_BUCKET;
+const COS_REGION = process.env.TENCENT_COS_REGION;
 
 // Initialize Tencent Cloud SMS Client
 const smsClient = new SmsClient({
@@ -55,13 +66,30 @@ const smsClient = new SmsClient({
     secretId: process.env.TENCENT_SECRET_ID,
     secretKey: process.env.TENCENT_SECRET_KEY,
   },
-  region: "ap-guangzhou", // Default to Guangzhou
+  region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
   profile: {
     httpProfile: {
       endpoint: "sms.tencentcloudapi.com",
     },
   },
 });
+
+// --- Middleware ---
+const authenticate = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
 
 app.post('/api/send-email', async (req, res) => {
   try {
@@ -140,15 +168,10 @@ app.post('/api/sms/send-otp', async (req, res) => {
 
   try {
     // 1. Store OTP in database
-    const { error: dbError } = await supabase
-      .from('sms_otps')
-      .insert({
-        phone,
-        code: otp,
-        expires_at: expiresAt.toISOString()
-      });
-
-    if (dbError) throw dbError;
+    await pool.query(
+      'INSERT INTO phone_otps (phone, code, expires_at) VALUES (?, ?, ?)',
+      [phone, otp, expiresAt]
+    );
 
     // 2. Send SMS via Tencent Cloud
     const params = {
@@ -185,29 +208,23 @@ app.post('/api/sms/verify-otp', async (req, res) => {
   const { phone, code } = req.body;
 
   try {
-    const { data, error } = await supabase
-      .from('sms_otps')
-      .select('*')
-      .eq('phone', phone)
-      .eq('code', code)
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const [otps] = await pool.query(
+      'SELECT * FROM phone_otps WHERE phone = ? AND code = ? AND used = FALSE AND expires_at > NOW()',
+      [phone, code]
+    );
 
-    if (error || !data) {
+    if (otps.length === 0) {
       return res.status(400).json({ error: '验证码无效或已过期' });
     }
 
+    const otpData = otps[0];
+
     // Mark as used
-    await supabase
-      .from('sms_otps')
-      .update({ used: true })
-      .eq('id', data.id);
+    await pool.query('UPDATE phone_otps SET used = TRUE WHERE id = ?', [otpData.id]);
 
     res.json({ success: true, message: '验证成功' });
   } catch (error) {
+    console.error('Verify OTP Error:', error);
     res.status(500).json({ error: '服务器错误' });
   }
 });
@@ -243,7 +260,26 @@ app.post('/api/sms/send-invite', async (req, res) => {
       }
     );
   } catch (error) {
-    res.status(500).json({ error: '服务器错误' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update password
+app.post('/api/auth/update-password', authenticate, async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await pool.query(
+      'UPDATE profiles SET password_hash = ? WHERE id = ?',
+      [hashedPassword, req.user.id]
+    );
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -257,19 +293,13 @@ app.post('/api/email/send-otp', async (req, res) => {
   try {
     // 1. Generate 8-digit OTP
     const code = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // 2. Save to database
-    const { error: dbError } = await supabase.from('email_otps').insert({
-      email,
-      code,
-      expires_at: expiresAt
-    });
-
-    if (dbError) {
-      console.error('Error saving email OTP:', dbError);
-      return res.status(500).json({ error: '验证码生成失败' });
-    }
+    await pool.query(
+      'INSERT INTO email_otps (email, code, expires_at) VALUES (?, ?, ?)',
+      [email, code, expiresAt]
+    );
 
     // 3. Send email using nodemailer
     const mailOptions = {
@@ -315,37 +345,29 @@ app.post('/api/auth/update-email', async (req, res) => {
 
   try {
     // 1. Verify OTP
-    const { data: otpData, error: otpError } = await supabase
-      .from('email_otps')
-      .select('*')
-      .eq('email', newEmail)
-      .eq('code', code)
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+    const [otps] = await pool.query(
+      `SELECT * FROM email_otps
+       WHERE email = ? AND code = ? AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [newEmail, code]
+    );
 
-    if (otpError || !otpData) {
+    if (otps.length === 0) {
       return res.status(400).json({ error: '验证码无效或已过期' });
     }
 
-    // 2. Forcefully Update User Email via Admin API
-    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-      email: newEmail,
-      email_confirm: true // Force confirm
-    });
+    const otpData = otps[0];
 
-    if (updateError) {
-      if (updateError.message.includes('already registered') || updateError.message.includes('email is taken')) {
-        return res.status(400).json({ error: '该邮箱已被其他账号使用' });
-      }
-      throw updateError;
-    }
+    // 2. Update User Email (This assumes we have a users table or we're using auth.users schema)
+    // For simplicity in self-hosted, we'll update the email in our profiles table.
+    // In a real migration from Supabase Auth, you'd need a local users table.
+    await pool.query(
+      'UPDATE profiles SET email = ? WHERE id = ?',
+      [newEmail, userId]
+    );
 
-    // 3. Update Profile (if necessary, though we usually just use auth.users)
-    // (Assuming you want to track email in profiles too, if not, skip this step)
-
-    // 4. Mark OTP as used
-    await supabase.from('email_otps').update({ used: true }).eq('id', otpData.id);
+    // 3. Mark OTP as used
+    await pool.query('UPDATE email_otps SET used = TRUE WHERE id = ?', [otpData.id]);
 
     res.json({ success: true, message: '邮箱更新成功' });
   } catch (error) {
@@ -363,132 +385,464 @@ app.post('/api/auth/register-phone', async (req, res) => {
 
   try {
     // 1. Verify OTP first
-    const { data: otpData, error: otpError } = await supabase
-      .from('sms_otps')
-      .select('*')
-      .eq('phone', phone)
-      .eq('code', code)
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+    const [otpRows] = await pool.query(
+      `SELECT * FROM phone_otps 
+       WHERE phone = ? AND code = ? AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [phone, code]
+    );
 
-    if (otpError || !otpData) {
+    if (otpRows.length === 0) {
       return res.status(400).json({ error: '验证码无效或已过期' });
     }
 
-    // 2. Prepare shadow email and formatted phone
+    const otpData = otpRows[0];
+
+    // 2. Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. Create user in profiles table
     const cleanPhone = phone.replace(/\D/g, '');
     const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
-    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanPhone)}`;
 
-    // 3. Create user using service role
-    const { data: userData, error: createError } = await supabase.auth.admin.createUser({
-      email: shadowEmail,
-      phone: formattedPhone,
-      password: password,
-      email_confirm: true,
-      phone_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-        phone: formattedPhone
-      }
-    });
+    await pool.query(
+      `INSERT INTO profiles (full_name, phone, password_hash, avatar_url, email)
+       VALUES (?, ?, ?, ?, ?)`,
+      [fullName, formattedPhone, hashedPassword, avatarUrl, `user_${cleanPhone}@everstory.ai`]
+    );
 
-    if (createError) {
-      if (createError.message.includes('already registered')) {
-        return res.status(400).json({ error: '该手机号已注册，请直接登录' });
-      }
-      throw createError;
-    }
+    const [userRows] = await pool.query('SELECT * FROM profiles WHERE phone = ?', [formattedPhone]);
+    const user = userRows[0];
 
     // 4. Mark OTP as used
-    await supabase.from('sms_otps').update({ used: true }).eq('id', otpData.id);
+    await pool.query('UPDATE phone_otps SET used = TRUE WHERE id = ?', [otpData.id]);
 
-    // 5. Initialize Profile
-    const userId = userData.user.id;
-    const { error: profileError } = await supabase.from('profiles').upsert({
-      id: userId,
-      full_name: fullName,
-      phone: formattedPhone,
-      avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanPhone)}`,
-      updated_at: new Date().toISOString()
-    });
+    // 5. Generate JWT
+    const token = jwt.sign({ id: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
 
-    if (profileError) {
-      console.warn('Profile initialization warning:', profileError);
-    }
-
-    res.json({ success: true, message: '注册成功' });
+    res.json({ success: true, token, user: { id: user.id, fullName: user.full_name, phone: user.phone } });
   } catch (error) {
     console.error('Registration Error:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: '该手机号已注册，请直接登录' });
+    }
     res.status(500).json({ error: '注册失败: ' + (error.message || '服务器错误') });
   }
 });
 
+// Login via Phone and Password
+app.post('/api/auth/login', async (req, res) => {
+  const { phone, password } = req.body;
+
+  try {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
+
+    const [rows] = await pool.query('SELECT * FROM profiles WHERE phone = ?', [formattedPhone]); // Changed $1 to ?
+    if (rows.length === 0) {
+      return res.status(401).json({ error: '账号或密码错误' });
+    }
+
+    const user = rows[0];
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: '账号或密码错误' });
+    }
+
+    const token = jwt.sign({ id: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, fullName: user.full_name, phone: user.phone, avatarUrl: user.avatar_url }
+    });
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ error: '登录失败' });
+  }
+});
+
+// Get current user info
+app.get('/api/auth/me', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT id, full_name, email, phone, avatar_url, is_premium FROM profiles WHERE id = ?', [req.user.id]); // Changed $1 to ?
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+    res.json({ user: rows[0] });
+  } catch (error) {
+    res.status(500).json({ error: '获取用户信息失败' });
+  }
+});
+
 // Update User Phone
-app.post('/api/auth/update-phone', async (req, res) => {
-  const { userId, newPhone, code } = req.body;
-  if (!userId || !newPhone || !code) {
+app.post('/api/auth/update-phone', authenticate, async (req, res) => {
+  const { newPhone, code } = req.body;
+  const userId = req.user.id;
+
+  if (!newPhone || !code) {
     return res.status(400).json({ error: '字段缺失' });
   }
 
   try {
     // 1. Verify OTP first
-    const { data: otpData, error: otpError } = await supabase
-      .from('sms_otps')
-      .select('*')
-      .eq('phone', newPhone)
-      .eq('code', code)
-      .eq('used', false)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+    const [otpRows] = await pool.query(
+      `SELECT * FROM phone_otps
+       WHERE phone = ? AND code = ? AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [newPhone, code]
+    );
 
-    if (otpError || !otpData) {
+    if (otpRows.length === 0) {
       return res.status(400).json({ error: '验证码无效或已过期' });
     }
 
-    // 2. Prepare shadow email and formatted phone
+    const otpData = otpRows[0];
     const cleanPhone = newPhone.replace(/\D/g, '');
     const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
-    const shadowEmail = `user_${cleanPhone.replace(/^86/, '')}@users.everstory.ai`;
 
-    // 3. Get current user to check if they have a real email
-    const { data: user, error: getError } = await supabase.auth.admin.getUserById(userId);
-    if (getError || !user) throw new Error('用户不存在');
+    // 2. Update Profile
+    await pool.query(
+      'UPDATE profiles SET phone = ?, updated_at = NOW() WHERE id = ?',
+      [formattedPhone, userId]
+    );
 
-    const updateData = {
-      phone: formattedPhone,
-      email_confirm: true,
-      phone_confirm: true,
-      user_metadata: {
-        ...user.user.user_metadata,
-        phone: formattedPhone
-      }
-    };
-
-    // ONLY update email if the current one is a shadow email or missing
-    if (!user.user.email || user.user.email.endsWith('@users.everstory.ai') || user.user.email.endsWith('@users.everstory.cc')) {
-      updateData.email = shadowEmail;
-    }
-
-    // 4. Update Auth User via Admin API
-    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, updateData);
-
-    if (updateError) throw updateError;
-
-    // 4. Update Profile
-    await supabase.from('profiles').update({
-      phone: formattedPhone,
-      updated_at: new Date().toISOString()
-    }).eq('id', userId);
-
-    // 5. Mark OTP as used
-    await supabase.from('sms_otps').update({ used: true }).eq('id', otpData.id);
+    // 3. Mark OTP as used
+    await pool.query('UPDATE phone_otps SET used = TRUE WHERE id = ?', [otpData.id]);
 
     res.json({ success: true, message: '更新成功' });
   } catch (error) {
     console.error('Update Phone Error:', error);
     res.status(500).json({ error: '更新失败: ' + (error.message || '服务器错误') });
+  }
+});
+
+// --- Storage Endpoints (Tencent COS) ---
+
+// Get pre-signed URL for upload
+app.post('/api/storage/upload-url', authenticate, async (req, res) => {
+  const { fileName, fileType } = req.body;
+  const key = `media/${req.user.id}/${Date.now()}_${fileName}`;
+
+  cos.getAuth({
+    Method: 'PUT',
+    Key: key,
+  }, (err, auth) => {
+    if (err) return res.status(500).json({ error: 'Failed to generate upload auth' });
+
+    const url = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${key}`;
+    res.json({ url, key, auth });
+  });
+});
+
+// Simple direct upload (for small files/blobs)
+app.post('/api/storage/upload', authenticate, async (req, res) => {
+  const { base64Data, fileName, fileType } = req.body;
+  const buffer = Buffer.from(base64Data, 'base64');
+  const key = `media/${req.user.id}/${Date.now()}_${fileName || 'upload.bin'}`;
+
+  cos.putObject({
+    Bucket: COS_BUCKET,
+    Region: COS_REGION,
+    Key: key,
+    Body: buffer,
+    ContentType: fileType,
+  }, (err, data) => {
+    if (err) {
+      console.error('COS Upload Error:', err);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+    const publicUrl = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${key}`;
+    res.json({ url: publicUrl, key });
+  });
+});
+
+// --- Project Endpoints ---
+
+app.get('/api/projects', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query( // Changed to destructure for MySQL result format
+      `SELECT p.*,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('project_id', pm.project_id, 'user_id', pm.user_id, 'role', pm.role)) FROM project_members pm WHERE pm.project_id = p.id) as members
+       FROM projects p
+       JOIN project_members pm ON p.id = pm.project_id
+       WHERE pm.user_id = ?`, // Changed $1 to ?, json_agg to JSON_ARRAYAGG, json_build_object to JSON_OBJECT
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取项目失败' });
+  }
+});
+
+app.post('/api/projects', authenticate, async (req, res) => {
+  const { name, description } = req.body;
+  const client = await pool.getConnection(); // Changed pool.connect() to pool.getConnection() for MySQL
+  try {
+    await client.beginTransaction(); // Changed client.query('BEGIN') to client.beginTransaction()
+    const [result] = await client.query( // Changed to destructure for MySQL result format
+      'INSERT INTO projects (name, description, owner_id) VALUES (?, ?, ?)', // Changed $1/$2/$3 to ?
+      [name, description, req.user.id]
+    );
+    const projectId = result.insertId; // Get the ID of the newly inserted project for auto-increment IDs
+    // If using UUIDs, you'd need to fetch the project by another unique field or generate UUID client-side.
+    // Assuming `id` is auto-increment for simplicity here, or that `RETURNING *` is not supported.
+    const [projectRows] = await client.query('SELECT * FROM projects WHERE id = ?', [projectId]);
+    const project = projectRows[0];
+
+    await client.query(
+      'INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)', // Changed $1/$2/$3 to ?
+      [project.id, req.user.id, 'owner']
+    );
+    await client.commit(); // Changed client.query('COMMIT') to client.commit()
+    res.json(project);
+  } catch (error) {
+    await client.rollback(); // Changed client.query('ROLLBACK') to client.rollback()
+    res.status(500).json({ error: '创建项目失败' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/projects/:id', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query( // Changed to destructure for MySQL result format
+      'SELECT * FROM projects WHERE id = ?', // Changed $1 to ?
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '项目不存在' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '获取项目详情失败' });
+  }
+});
+
+app.patch('/api/projects/:id', authenticate, async (req, res) => {
+  const { name, description } = req.body;
+  try {
+    const [result] = await pool.query( // Changed to destructure for MySQL result format
+      'UPDATE projects SET name = COALESCE(?, name), description = COALESCE(?, description) WHERE id = ? AND owner_id = ?', // Changed $1/$2/$3/$4 to ?
+      [name, description, req.params.id, req.user.id]
+    );
+    if (result.affectedRows === 0) return res.status(403).json({ error: '无权修改或项目不存在' }); // Check affectedRows for MySQL
+    const [rows] = await pool.query('SELECT * FROM projects WHERE id = ?', [req.params.id]); // Fetch updated row
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '更新项目失败' });
+  }
+});
+
+app.delete('/api/projects/:id', authenticate, async (req, res) => {
+  try {
+    const [result] = await pool.query( // Changed to destructure for MySQL result format
+      'DELETE FROM projects WHERE id = ? AND owner_id = ?', // Changed $1/$2 to ?
+      [req.params.id, req.user.id]
+    );
+    if (result.affectedRows === 0) return res.status(403).json({ error: '无权删除或项目不存在' }); // Check affectedRows for MySQL
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '删除项目失败' });
+  }
+});
+
+// --- Story Endpoints ---
+
+app.get('/api/projects/:projectId/stories', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query( // Changed to destructure for MySQL result format
+      'SELECT * FROM stories WHERE project_id = ? ORDER BY created_at DESC', // Changed $1 to ?
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取故事失败' });
+  }
+});
+
+app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
+  const { title, content, image_url, type, pages, metadata, prompt_id } = req.body;
+  try {
+    const [result] = await pool.query( // Changed to destructure for MySQL result format
+      `INSERT INTO stories (project_id, title, content, image_url, type, pages, metadata, prompt_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, // Changed $1-$8 to ?
+      [req.params.projectId, title, content, image_url, type || 'audio', pages || 1, metadata, prompt_id]
+    );
+    const storyId = result.insertId; // Get the ID of the newly inserted story
+    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [storyId]); // Fetch the newly created story
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '创建故事失败' });
+  }
+});
+
+app.get('/api/stories/:id', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [req.params.id]); // Changed $1 to ?
+    if (rows.length === 0) return res.status(404).json({ error: '故事不存在' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '获取故事详情失败' });
+  }
+});
+
+app.patch('/api/stories/:id', authenticate, async (req, res) => {
+  const { title, content, image_url, type, pages, metadata } = req.body;
+  try {
+    const [result] = await pool.query(
+      `UPDATE stories SET 
+        title = COALESCE(?, title), 
+        content = COALESCE(?, content), 
+        image_url = COALESCE(?, image_url),
+        type = COALESCE(?, type),
+        pages = COALESCE(?, pages),
+        metadata = COALESCE(?, metadata)
+       WHERE id = ?`,
+      [title, content, image_url, type, pages, JSON.stringify(metadata), req.params.id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: '故事不存在' });
+    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [req.params.id]);
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '更新故事失败' });
+  }
+});
+
+app.delete('/api/stories/:id', authenticate, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM stories WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '删除故事失败' });
+  }
+});
+
+// --- Prompt Endpoints ---
+
+app.get('/api/projects/:projectId/prompts', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM prompts WHERE project_id = ? ORDER BY sent_date ASC',
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取提示词失败' });
+  }
+});
+
+app.post('/api/projects/:projectId/prompts', authenticate, async (req, res) => {
+  const { question, image_url, category, status } = req.body;
+  try {
+    const [result] = await pool.query(
+      `INSERT INTO prompts (project_id, question, image_url, category, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [req.params.projectId, question, image_url, category, status || 'sent']
+    );
+    const [rows] = await pool.query('SELECT * FROM prompts WHERE id = ?', [result.insertId || req.body.id]); // Adjust if using UUIDs
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '创建提示词失败' });
+  }
+});
+
+app.patch('/api/prompts/:id', authenticate, async (req, res) => {
+  const { status } = req.body;
+  try {
+    await pool.query('UPDATE prompts SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '更新提示词状态失败' });
+  }
+});
+
+// --- Order Endpoints ---
+
+app.get('/api/projects/:projectId/orders', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT o.*, (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ol.id, 'order_id', ol.order_id)) FROM order_logistics ol WHERE ol.order_id = o.id) as logistics 
+       FROM orders o WHERE o.project_id = ? ORDER BY o.created_at DESC`,
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取订单失败' });
+  }
+});
+
+app.post('/api/projects/:projectId/orders', authenticate, async (req, res) => {
+  const { id, book_title, book_subtitle, book_author, cover_color, image_url, status, price, recipient_name, contact_phone, shipping_address } = req.body;
+  const orderId = id || `ORD-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+
+  const client = await pool.getConnection();
+  try {
+    await client.beginTransaction();
+    await client.query(
+      `INSERT INTO orders (id, project_id, user_id, book_title, book_subtitle, book_author, cover_color, image_url, status, price, recipient_name, contact_phone, shipping_address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orderId, req.params.projectId, req.user.id, book_title, book_subtitle, book_author, cover_color, image_url, status || 'processing', price, recipient_name, contact_phone, shipping_address]
+    );
+    // Set premium status
+    if (status === 'processing' || !status) {
+      await client.query('UPDATE profiles SET is_premium = TRUE WHERE id = ?', [req.user.id]);
+    }
+    await client.commit();
+    const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+    res.json(rows[0]);
+  } catch (error) {
+    await client.rollback();
+    res.status(500).json({ error: '创建订单失败' });
+  } finally {
+    client.release();
+  }
+});
+
+// --- Project Members & Invitations ---
+
+app.get('/api/projects/:projectId/members', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT pm.*, p.full_name, p.avatar_url, p.phone, p.email
+       FROM project_members pm
+       JOIN profiles p ON pm.user_id = p.id
+       WHERE pm.project_id = ?`,
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取成员失败' });
+  }
+});
+
+app.post('/api/projects/:projectId/invitations', authenticate, async (req, res) => {
+  const { email, phone } = req.body;
+  try {
+    const [result] = await pool.query(
+      'INSERT INTO project_invitations (project_id, email, phone) VALUES (?, ?, ?)',
+      [req.params.projectId, email, phone]
+    );
+    const [rows] = await pool.query('SELECT * FROM project_invitations WHERE id = ?', [result.insertId]);
+    res.json(rows[0]);
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.json({ success: true, message: '已存在邀请' });
+    res.status(500).json({ error: '创建邀请失败' });
+  }
+});
+
+// Public Project Preview (Bypass Auth for invitations/preview)
+app.get('/api/public/projects/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, name, description, owner_id, created_at,
+        (SELECT full_name FROM profiles WHERE id = projects.owner_id) as owner_name
+       FROM projects WHERE id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: '项目不存在' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: '获取项目预览失败' });
   }
 });
 

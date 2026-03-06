@@ -1,10 +1,44 @@
-import { supabase } from '../lib/supabaseClient';
 import { Project, Story, Prompt, Order, ProjectMember } from '../types';
 
 /**
- * Service for interacting with the Supabase database.
- * Syncs all application data including projects, stories, prompts, and orders.
+ * Service for interacting with the Express Backend API.
+ * Replaces Supabase with direct REST calls.
  */
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+// --- JWT Helpers ---
+const TOKEN_KEY = 'everstory-auth-token';
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
+const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+// --- Generic API Wrapper ---
+async function apiRequest(path: string, options: RequestInit = {}) {
+    const token = getToken();
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers || {})
+    };
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers
+    });
+
+    if (response.status === 401) {
+        clearToken();
+    }
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown API error' }));
+        throw new Error(error.error || `API Error: ${response.statusText}`);
+    }
+
+    return response.json();
+}
+
 // --- Mock Helpers ---
 const MOCK_PROJECTS_KEY = 'everstory-mock-projects';
 const MOCK_STORIES_KEY = 'everstory-mock-stories';
@@ -12,42 +46,85 @@ const MOCK_PROMPTS_KEY = 'everstory-mock-prompts';
 const MOCK_INTERACTIONS_KEY = 'everstory-mock-interactions';
 
 const isMockUser = (userId?: string) => userId?.startsWith('mock-');
-
 const getMockData = (key: string) => JSON.parse(localStorage.getItem(key) || '[]');
 const saveMockData = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
 
 /**
- * Service for interacting with the Supabase database.
- * Syncs all application data including projects, stories, prompts, and orders.
+ * Service for interacting with the backend API.
  */
 export const databaseService = {
     // --- Auth ---
     async getSession() {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        return data.session;
+        const token = getToken();
+        if (!token) return null;
+        try {
+            const data = await apiRequest('/api/auth/me');
+            return { user: data.user, access_token: token };
+        } catch (e) {
+            return null;
+        }
+    },
+
+    async login(phone: string, password: string) {
+        const data = await apiRequest('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ phone, password })
+        });
+        if (data.token) {
+            setToken(data.token);
+        }
+        return data;
+    },
+
+    async register(phone: string, password: string, fullName: string, code: string) {
+        const data = await apiRequest('/api/auth/register-phone', {
+            method: 'POST',
+            body: JSON.stringify({ phone, password, fullName, code })
+        });
+        if (data.token) {
+            setToken(data.token);
+        }
+        return data;
+    },
+
+    async sendOTP(identifier: string, type: 'phone' | 'email') {
+        const endpoint = type === 'phone' ? '/api/sms/send-otp' : '/api/email/send-otp';
+        const bodyKey = type === 'phone' ? 'phone' : 'email';
+        return await apiRequest(endpoint, {
+            method: 'POST',
+            body: JSON.stringify({ [bodyKey]: identifier })
+        });
+    },
+
+    async logout() {
+        clearToken();
+    },
+
+    async updatePhone(newPhone: string, code: string) {
+        return await apiRequest('/api/auth/update-phone', {
+            method: 'POST',
+            body: JSON.stringify({ newPhone, code })
+        });
+    },
+
+    async updateEmail(newEmail: string, code: string) {
+        return await apiRequest('/api/auth/update-email', {
+            method: 'POST',
+            body: JSON.stringify({ newEmail, code })
+        });
+    },
+
+    async updatePassword(password: string) {
+        return await apiRequest('/api/auth/update-password', {
+            method: 'POST',
+            body: JSON.stringify({ password })
+        });
     },
 
     // --- Projects ---
     async getProjects() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (isMockUser(user?.id)) {
-            console.log('DatabaseService: Returning mock projects');
-            return getMockData(MOCK_PROJECTS_KEY);
-        }
-
-        const { data, error } = await supabase
-            .from('projects')
-            .select(`
-        *,
-        members:project_members(
-          *,
-          user:profiles(*)
-        )
-      `);
-
-        if (error) throw error;
-        return (data || []).map(p => ({
+        const data = await apiRequest('/api/projects');
+        return (data || []).map((p: any) => ({
             id: p.id,
             name: p.name,
             description: p.description,
@@ -57,117 +134,35 @@ export const databaseService = {
                 id: m.id,
                 userId: m.user_id,
                 projectRole: m.role,
-                name: m.user?.full_name || m.user?.phone || '未知用户',
-                initials: (m.user?.full_name || m.user?.phone || '未').substring(0, 1),
-                avatar: m.user?.avatar_url || m.user?.avatar,
-                phone: m.user?.phone,
-                user: m.user,
-                ...m.user
+                name: m.full_name || m.phone || '未知用户',
+                initials: (m.full_name || m.phone || '未').substring(0, 1),
+                avatar: m.avatar_url,
+                phone: m.phone,
+                ...m
             }))
         })) as Project[];
     },
 
     async getProjectById(projectId: string) {
         if (!projectId) return null;
-        if (isMockUser(projectId)) {
+        if (projectId.startsWith('mock-')) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             return projects.find((p: any) => p.id === projectId);
         }
-
         try {
-            // Use the RPC function to bypass RLS for previewing basic project info
-            const { data, error } = await supabase
-                .rpc('get_project_preview', { p_id: projectId });
-
-            if (error) {
-                console.error('Error in get_project_preview RPC:', error);
-                // Fallback to normal select if RPC fails or is not yet migrated
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('projects')
-                    .select(`
-                        id,
-                        name,
-                        description,
-                        owner_id,
-                        created_at
-                    `)
-                    .eq('id', projectId)
-                    .maybeSingle();
-
-                if (fallbackError) {
-                    console.error('Fallback fetch error:', fallbackError);
-                    return null;
-                }
-                if (!fallbackData) return null;
-                return {
-                    id: fallbackData.id,
-                    name: fallbackData.name,
-                    description: fallbackData.description,
-                    ownerId: fallbackData.owner_id,
-                    ownerName: '项目成员',
-                    createdAt: new Date(fallbackData.created_at).toLocaleDateString('zh-CN')
-                };
-            }
-
-            return data; // RPC returns the JSON object directly (or null)
+            const data = await apiRequest(`/api/projects/${projectId}`);
+            return data;
         } catch (err) {
-            console.error('Unexpected error in getProjectById:', err);
+            console.error('Error fetching project by id:', err);
             return null;
         }
     },
 
     async createProject(name: string, description: string) {
-        const { data: { user } } = await supabase.auth.getUser();
-        console.log('DatabaseService.createProject - Current User:', user?.id);
-
-        if (!user) {
-            console.error('DatabaseService.createProject - No user found in session');
-            throw new Error('User not authenticated');
-        }
-
-        if (isMockUser(user.id)) {
-            console.log('DatabaseService: Creating mock project');
-            const newProject = {
-                id: 'mock-proj-' + Date.now(),
-                name,
-                description,
-                owner_id: user.id,
-                ownerId: user.id,
-                createdAt: new Date().toLocaleDateString('zh-CN'),
-                members: [{
-                    id: 'mock-mem-' + Date.now(),
-                    project_id: 'mock-proj-' + Date.now(),
-                    user_id: user.id,
-                    role: 'owner',
-                    projectRole: 'owner',
-                    user: {
-                        id: user.id,
-                        full_name: user.user_metadata?.full_name || 'Guest',
-                        phone: user.user_metadata?.phone || 'N/A'
-                    }
-                }]
-            };
-            const projects = getMockData(MOCK_PROJECTS_KEY);
-            projects.push(newProject);
-            saveMockData(MOCK_PROJECTS_KEY, projects);
-            return newProject;
-        }
-
-        const { data, error } = await supabase
-            .from('projects')
-            .insert({ name, description, owner_id: user.id })
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        // Add owner as a member
-        await supabase.from('project_members').insert({
-            project_id: data.id,
-            user_id: user.id,
-            role: 'owner'
+        const data = await apiRequest('/api/projects', {
+            method: 'POST',
+            body: JSON.stringify({ name, description })
         });
-
         return {
             id: data.id,
             name: data.name,
@@ -179,7 +174,7 @@ export const databaseService = {
     },
 
     async updateProject(projectId: string, updates: Partial<{ name: string; description: string }>) {
-        if (isMockUser(projectId)) {
+        if (projectId.startsWith('mock-')) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             const index = projects.findIndex((p: any) => p.id === projectId);
             if (index !== -1) {
@@ -188,95 +183,38 @@ export const databaseService = {
                 return projects[index];
             }
         }
-
-        const { data, error } = await supabase
-            .from('projects')
-            .update(updates)
-            .eq('id', projectId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
+        return await apiRequest(`/api/projects/${projectId}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updates)
+        });
     },
 
     async deleteProject(projectId: string) {
-        if (isMockUser(projectId)) {
-            // Delete project
+        if (projectId.startsWith('mock-')) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             const filteredProjects = projects.filter((p: any) => p.id !== projectId);
             saveMockData(MOCK_PROJECTS_KEY, filteredProjects);
-
-            // Delete associated stories
-            const stories = getMockData(MOCK_STORIES_KEY);
-            const filteredStories = stories.filter((s: any) => s.projectId !== projectId);
-            saveMockData(MOCK_STORIES_KEY, filteredStories);
-
-            // Delete associated prompts
-            const prompts = getMockData(MOCK_PROMPTS_KEY);
-            const filteredPrompts = prompts.filter((p: any) => p.projectId !== projectId);
-            saveMockData(MOCK_PROMPTS_KEY, filteredPrompts);
-
-            // Invitations are also in local storage but keyed by name, we can clear them globally or filter
-            const MOCK_INVITES_KEY = 'everstory-mock-invitations';
-            const invites = JSON.parse(localStorage.getItem(MOCK_INVITES_KEY) || '[]');
-            const filteredInvites = invites.filter((inv: any) => inv.projectId !== projectId);
-            localStorage.setItem(MOCK_INVITES_KEY, JSON.stringify(filteredInvites));
-
             return;
         }
-
-        // Real data deletion (cascades should be handled by DB, but we do it explicitly for safety if FKs aren't set to cascade)
-        // 1. Stories
-        await supabase.from('stories').delete().eq('project_id', projectId);
-        // 2. Prompts
-        await supabase.from('prompts').delete().eq('project_id', projectId);
-        // 3. Orders (some orders might be linked, clear them)
-        await supabase.from('orders').delete().eq('project_id', projectId);
-        // 4. Invitations
-        await supabase.from('project_invitations').delete().eq('project_id', projectId);
-        // 5. Members
-        await supabase.from('project_members').delete().eq('project_id', projectId);
-        // 6. Finally, the project itself
-        const { error } = await supabase.from('projects').delete().eq('id', projectId);
-
-        if (error) throw error;
+        await apiRequest(`/api/projects/${projectId}`, { method: 'DELETE' });
     },
 
     // --- Stories ---
     async getStories(projectId: string) {
-        if (isMockUser(projectId)) {
+        if (projectId.startsWith('mock-')) {
             const stories = getMockData(MOCK_STORIES_KEY);
             return stories.filter((s: any) => s.projectId === projectId);
         }
-
-        const { data, error } = await supabase
-            .from('stories')
-            .select('*')
-            .eq('project_id', projectId)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return (data || []).map(s => {
+        const data = await apiRequest(`/api/projects/${projectId}/stories`);
+        return (data || []).map((s: any) => {
             const metadata = s.metadata || {};
-            // If it's a video and imageUrl is actually the video file, 
-            // ensure we have videoUrl set.
             let videoUrl = metadata.videoUrl || (s.type === 'video' ? s.image_url : undefined);
-            let imageUrl = s.image_url;
-
-            // Simple heuristic/regex: if image_url points to a video file, it's not a proper cover image
-            const isVideoFile = imageUrl?.match(/\.(webm|mp4|mov|avi|m4v|3gp|mkv)($|\?)/i);
-            if (isVideoFile && s.type === 'video') {
-                videoUrl = imageUrl;
-                imageUrl = metadata.coverUrl || metadata.imageUrl || ''; // Use custom cover if exists
-            }
-
             return {
                 id: s.id,
                 projectId: s.project_id,
                 title: s.title,
                 content: s.content,
-                imageUrl: imageUrl,
+                imageUrl: s.image_url,
                 videoUrl: videoUrl,
                 type: s.type,
                 pages: s.pages,
@@ -287,43 +225,21 @@ export const databaseService = {
             };
         }) as Story[];
     },
+
     async getStory(storyId: string) {
         if (storyId.startsWith('mock-')) {
             const stories = getMockData(MOCK_STORIES_KEY);
             return stories.find((s: any) => s.id === storyId) as Story;
         }
-
-        const { data, error } = await supabase
-            .from('stories')
-            .select('*')
-            .eq('id', storyId)
-            .single();
-
-        if (error) throw error;
-
-        const s = data;
+        const s = await apiRequest(`/api/stories/${storyId}`);
         const metadata = s.metadata || {};
-        // Strict video detection: only fall back to image_url if it's actually a video file
-        const isVideoFile = s.image_url?.match(/\.(webm|mp4|mov|avi|m4v|3gp|mkv)($|\?)/i);
-        let videoUrl = metadata.videoUrl;
-
-        if (!videoUrl && isVideoFile && s.type === 'video') {
-            videoUrl = s.image_url;
-        }
-
-        let imageUrl = s.image_url;
-        // If image_url was actually a video file used as the source, use coverUrl/imageUrl from metadata if available
-        if (isVideoFile && s.type === 'video') {
-            imageUrl = metadata.coverUrl || metadata.imageUrl || '';
-        }
-
         return {
             id: s.id,
             projectId: s.project_id,
             title: s.title,
             content: s.content,
-            imageUrl: imageUrl,
-            videoUrl: videoUrl,
+            imageUrl: s.image_url,
+            videoUrl: metadata.videoUrl,
             type: s.type,
             pages: s.pages,
             date: new Date(s.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -334,63 +250,34 @@ export const databaseService = {
     },
 
     async createStory(projectId: string, story: Partial<Story>) {
-        if (isMockUser(projectId)) {
+        if (projectId.startsWith('mock-')) {
             const newStory = {
                 id: 'mock-story-' + Date.now(),
                 projectId,
-                title: story.title,
-                content: story.content,
-                imageUrl: story.imageUrl,
-                videoUrl: story.videoUrl,
-                type: story.type,
-                pages: story.pages || 1,
-                date: new Date().toLocaleDateString('zh-CN'),
-                metadata: {
-                    ...story.metadata,
-                    videoUrl: story.videoUrl,
-                    additionalImages: story.additionalImages || []
-                },
-                promptId: story.promptId
+                ...story,
+                date: new Date().toLocaleDateString('zh-CN')
             };
             const stories = getMockData(MOCK_STORIES_KEY);
             stories.push(newStory);
             saveMockData(MOCK_STORIES_KEY, stories);
             return newStory as Story;
         }
-
-        const metadata = {
-            ...story.metadata,
-            videoUrl: story.videoUrl,
-            additionalImages: story.additionalImages || []
-        };
-
-        const { data, error } = await supabase
-            .from('stories')
-            .insert({
-                project_id: projectId,
-                title: story.title,
-                content: story.content,
+        const data = await apiRequest(`/api/projects/${projectId}/stories`, {
+            method: 'POST',
+            body: JSON.stringify({
+                ...story,
                 image_url: story.imageUrl,
-                type: story.type,
-                pages: story.pages || 1,
-                metadata: metadata,
-                prompt_id: story.promptId
+                metadata: {
+                    ...story.metadata,
+                    videoUrl: story.videoUrl,
+                    additionalImages: story.additionalImages || []
+                }
             })
-            .select()
-            .single();
-
-        if (error) throw error;
+        });
         return {
-            id: data.id,
-            projectId: data.project_id,
-            title: data.title,
-            content: data.content,
+            ...data,
             imageUrl: data.image_url,
-            videoUrl: data.metadata?.videoUrl,
-            type: data.type,
-            pages: data.pages,
-            date: new Date(data.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-            metadata: data.metadata
+            date: new Date(data.created_at).toLocaleDateString('zh-CN')
         } as Story;
     },
 
@@ -404,51 +291,17 @@ export const databaseService = {
                 return stories[index] as Story;
             }
         }
-
-        // 1. Fetch current story to get existing metadata to avoid wiping it
-        const { data: current, error: fetchError } = await supabase
-            .from('stories')
-            .select('*')
-            .eq('id', storyId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        const metadata = {
-            ...(current.metadata || {}),
-            ...(updates.metadata || {})
-        };
-        if (updates.videoUrl) metadata.videoUrl = updates.videoUrl;
-        if (updates.additionalImages) metadata.additionalImages = updates.additionalImages;
-
-        const updatePayload: any = {};
-        if (updates.title !== undefined) updatePayload.title = updates.title;
-        if (updates.content !== undefined) updatePayload.content = updates.content;
-        if (updates.imageUrl !== undefined) updatePayload.image_url = updates.imageUrl;
-        if (updates.type !== undefined) updatePayload.type = updates.type;
-        if (updates.pages !== undefined) updatePayload.pages = updates.pages;
-        if (updates.promptId !== undefined) updatePayload.prompt_id = updates.promptId;
-        updatePayload.metadata = metadata;
-
-        const { data, error } = await supabase
-            .from('stories')
-            .update(updatePayload)
-            .eq('id', storyId)
-            .select()
-            .single();
-
-        if (error) throw error;
+        const data = await apiRequest(`/api/stories/${storyId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                ...updates,
+                image_url: updates.imageUrl
+            })
+        });
         return {
-            id: data.id,
-            projectId: data.project_id,
-            title: data.title,
-            content: data.content,
+            ...data,
             imageUrl: data.image_url,
-            videoUrl: data.metadata?.videoUrl,
-            type: data.type,
-            pages: data.pages,
-            date: new Date(data.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-            metadata: data.metadata
+            date: new Date(data.created_at).toLocaleDateString('zh-CN')
         } as Story;
     },
 
@@ -459,120 +312,60 @@ export const databaseService = {
             saveMockData(MOCK_STORIES_KEY, filtered);
             return;
         }
-
-        const { error } = await supabase
-            .from('stories')
-            .delete()
-            .eq('id', storyId);
-
-        if (error) throw error;
+        await apiRequest(`/api/stories/${storyId}`, { method: 'DELETE' });
     },
 
     // --- Prompts ---
     async getPrompts(projectId: string) {
-        if (isMockUser(projectId)) {
+        if (projectId.startsWith('mock-')) {
             return getMockData(MOCK_PROMPTS_KEY).filter((p: any) => p.projectId === projectId);
         }
-
-        // Fetch prompts
-        const { data: promptsData, error: promptsError } = await supabase
-            .from('prompts')
-            .select('*')
-            .eq('project_id', projectId)
-            .order('sent_date', { ascending: true });
-
-        if (promptsError) throw promptsError;
-
-        // Fetch stories for this project to check fulfillment, including created_at for recorded date
-        const { data: storiesData, error: storiesError } = await supabase
-            .from('stories')
-            .select('prompt_id, created_at')
-            .eq('project_id', projectId)
-            .not('prompt_id', 'is', null);
-
-        if (storiesError) throw storiesError;
-
-        // Map promptId -> recorded date
-        const recordedMap = new Map<string, string>();
-        for (const s of storiesData || []) {
-            if (s.prompt_id && !recordedMap.has(s.prompt_id)) {
-                recordedMap.set(
-                    s.prompt_id,
-                    new Date(s.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-                );
-            }
-        }
-
-        return (promptsData || []).map(p => ({
+        const data = await apiRequest(`/api/projects/${projectId}/prompts`);
+        return (data || []).map((p: any) => ({
             id: p.id,
             question: p.question,
             imageUrl: p.image_url,
             status: p.status,
             category: p.category || '自定义',
-            sentDate: new Date(p.sent_date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
-            isRecorded: recordedMap.has(p.id),
-            recordedDate: recordedMap.get(p.id)
+            sentDate: new Date(p.sent_date).toLocaleDateString('zh-CN'),
+            isRecorded: !!p.is_recorded,
+            recordedDate: p.recorded_date ? new Date(p.recorded_date).toLocaleDateString('zh-CN') : undefined
         })) as Prompt[];
     },
 
-    async createPrompt(projectId: string, question: string, category: string = '自定义', imageUrl?: string) {
-        if (isMockUser(projectId)) {
+    async createPrompt(projectId: string, prompt: Partial<Prompt>) {
+        if (projectId.startsWith('mock-')) {
             const newPrompt = {
                 id: 'mock-prompt-' + Date.now(),
                 projectId,
-                question: question,
-                category: category,
-                imageUrl: imageUrl || 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=400',
-                status: 'sent',
-                sentDate: new Date().toLocaleDateString('zh-CN')
+                ...prompt,
+                sentDate: new Date().toISOString()
             };
             const prompts = getMockData(MOCK_PROMPTS_KEY);
             prompts.push(newPrompt);
             saveMockData(MOCK_PROMPTS_KEY, prompts);
             return newPrompt as Prompt;
         }
-
-        const { data, error } = await supabase
-            .from('prompts')
-            .insert({
-                project_id: projectId,
-                question: question,
-                category: category,
-                image_url: imageUrl || 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=400',
-                status: 'sent',
-                sent_date: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (error) throw error;
-        return {
-            id: data.id,
-            question: data.question,
-            imageUrl: data.image_url,
-            status: data.status,
-            category: data.category || '自定义',
-            sentDate: new Date(data.sent_date).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-        } as Prompt;
+        return await apiRequest(`/api/projects/${projectId}/prompts`, {
+            method: 'POST',
+            body: JSON.stringify(prompt)
+        });
     },
 
-    async updatePromptStatus(promptId: string, status: 'sent' | 'draft') {
+    async updatePromptStatus(promptId: string, status: string) {
         if (promptId.startsWith('mock-')) {
             const prompts = getMockData(MOCK_PROMPTS_KEY);
             const index = prompts.findIndex((p: any) => p.id === promptId);
             if (index !== -1) {
                 prompts[index].status = status;
                 saveMockData(MOCK_PROMPTS_KEY, prompts);
-                return;
             }
+            return;
         }
-
-        const { error } = await supabase
-            .from('prompts')
-            .update({ status })
-            .eq('id', promptId);
-
-        if (error) throw error;
+        await apiRequest(`/api/prompts/${promptId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status })
+        });
     },
 
     async deletePrompt(promptId: string) {
@@ -582,249 +375,67 @@ export const databaseService = {
             saveMockData(MOCK_PROMPTS_KEY, filtered);
             return;
         }
-
-        const { error } = await supabase
-            .from('prompts')
-            .delete()
-            .eq('id', promptId);
-
-        if (error) throw error;
+        await apiRequest(`/api/prompts/${promptId}`, { method: 'DELETE' });
     },
 
     // --- Orders ---
     async getOrders(projectId: string) {
-        if (isMockUser(projectId)) {
-            return []; // Orders not mocked for now
-        }
-        const { data, error } = await supabase
-            .from('orders')
-            .select(`
-        *,
-        logistics:order_logistics(*)
-      `)
-            .eq('project_id', projectId)
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return data as Order[];
+        return await apiRequest(`/api/projects/${projectId}/orders`);
     },
 
     async createOrder(projectId: string, orderData: Partial<Order>) {
-        if (isMockUser(projectId)) {
-            return { id: 'mock-order-' + Date.now(), ...orderData };
-        }
-        const { data: { user } } = await supabase.auth.getUser();
-
-        // Generate a reference ID if not provided
-        const id = orderData.id || `ORD-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-
-        const { data, error } = await supabase
-            .from('orders')
-            .insert({
-                id,
-                project_id: projectId,
-                user_id: user?.id,
-                book_title: orderData.bookTitle,
-                book_subtitle: orderData.bookSubtitle,
-                book_author: orderData.bookAuthor,
-                cover_color: orderData.coverColor,
-                image_url: orderData.imageUrl,
-                status: orderData.status || 'processing',
-                price: orderData.price,
-                recipient_name: orderData.recipientName,
-                contact_phone: orderData.contactPhone,
-                shipping_address: orderData.shippingAddress
-            })
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        // If order is successful, set user as premium
-        if (data && data.status === 'processing') {
-            await supabase
-                .from('profiles')
-                .update({ is_premium: true })
-                .eq('id', user?.id);
-        }
-
-        return data;
+        return await apiRequest(`/api/projects/${projectId}/orders`, {
+            method: 'POST',
+            body: JSON.stringify(orderData)
+        });
     },
 
-    // --- Storage ---
-    async uploadMedia(file: File | Blob, path: string, contentType?: string) {
-        if (path.includes('mock-') || isMockUser(path)) {
-            return URL.createObjectURL(file);
+    // --- Members & Invitations ---
+    async getProjectMembers(projectId: string) {
+        if (projectId.startsWith('mock-')) {
+            const projects = getMockData(MOCK_PROJECTS_KEY);
+            const project = projects.find((p: any) => p.id === projectId);
+            return project ? project.members : [];
         }
-
-        const { error: uploadError } = await supabase.storage
-            .from('media')
-            .upload(path, file, {
-                upsert: true,
-                contentType: contentType || (file instanceof File ? file.type : undefined)
-            });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('media')
-            .getPublicUrl(path);
-
-        return publicUrl;
+        return await apiRequest(`/api/projects/${projectId}/members`);
     },
 
-    async uploadPhoto(projectId: string, file: File) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `prompts/${projectId}/${fileName}`;
-
-        return await this.uploadMedia(file, filePath);
-    },
-
-    async downloadMedia(url: string) {
-        // If it's a Supabase storage URL, try to download via storage API for better reliability/CORS
-        if (url.includes('.supabase.co/storage/v1/object/public/media/')) {
-            const path = url.split('/public/media/')[1];
-            if (path) {
-                const { data, error } = await supabase.storage
-                    .from('media')
-                    .download(path);
-                if (!error && data) return data;
-                console.warn('Supabase download failed, falling back to fetch:', error);
-            }
+    async createInvitation(projectId: string, email?: string, phone?: string) {
+        if (projectId.startsWith('mock-')) {
+            const invites = getMockData('everstory-mock-invitations');
+            invites.push({ projectId, email, phone });
+            saveMockData('everstory-mock-invitations', invites);
+            return { success: true };
         }
-
-        // Fallback to standard fetch
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Failed to fetch media: ${response.statusText}`);
-        return await response.blob();
+        return await apiRequest(`/api/projects/${projectId}/invitations`, {
+            method: 'POST',
+            body: JSON.stringify({ email, phone })
+        });
     },
 
-    // --- Invitations ---
-    async sendInvitation(projectId: string, identifier: string, options?: { inviterName?: string; projectTitle?: string }) {
-        console.log(`DatabaseService: Sending invitation to ${identifier} for project ${projectId}`);
-        const MOCK_INVITES_KEY = 'everstory-mock-invitations';
-        const isEmail = identifier.includes('@');
-
-        const normalizePhone = (p: string) => {
-            const clean = p.replace(/\D/g, '');
-            return clean.length === 11 ? `+86${clean}` : (clean.startsWith('86') && clean.length === 13 ? `+${clean}` : p);
-        };
-
-        const normalizedIdentifier = isEmail ? identifier.trim().toLowerCase() : normalizePhone(identifier);
-
-        const getMockInvites = () => {
-            const data = localStorage.getItem(MOCK_INVITES_KEY);
-            return data ? JSON.parse(data) : [];
-        };
-
-        const saveMockInvites = (invites: { phone?: string; email?: string; projectId: string }[]) => {
-            localStorage.setItem(MOCK_INVITES_KEY, JSON.stringify(invites));
-        };
-
-        if (isMockUser(projectId)) {
-            const invites = getMockInvites();
-            if (!invites.some((inv: any) => (isEmail ? inv.email === identifier : inv.phone === identifier) && inv.projectId === projectId)) {
-                invites.push({ [isEmail ? 'email' : 'phone']: identifier, projectId });
-                saveMockInvites(invites);
-            }
+    async deleteInvitation(projectId: string, identifier: string) {
+        if (projectId.startsWith('mock-')) {
+            const invites = getMockData('everstory-mock-invitations');
+            const filtered = invites.filter((inv: any) =>
+                inv.projectId !== projectId || (inv.email !== identifier && inv.phone !== identifier)
+            );
+            saveMockData('everstory-mock-invitations', filtered);
             return;
         }
-
-        try {
-            // Use select to check if exists or insert with specific handling
-            const { error } = await supabase.from('project_invitations').insert({
-                project_id: projectId,
-                [isEmail ? 'email' : 'phone']: normalizedIdentifier
-            });
-
-            if (error) {
-                if (error.code === '23505') {
-                    console.log('DatabaseService: Invitation already exists, skipping insert.');
-                } else {
-                    console.warn('Database insert error (ignoring to allow email send):', error);
-                }
-            }
-
-            // Trigger Email if applicable
-            if (isEmail) {
-                console.log(`DatabaseService: Triggering email for ${identifier}`);
-                let inviter = options?.inviterName;
-                let title = options?.projectTitle;
-
-                // Better to fetch if not provided
-                if (!inviter || !title) {
-                    const { data: project } = await supabase.from('projects').select('name').eq('id', projectId).single();
-                    if (project) title = project.name;
-
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (user) {
-                        const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-                        inviter = profile?.full_name || user.user_metadata?.full_name || user.email;
-                    }
-                }
-
-                // Use the custom Node.js Express server instead of Supabase Edge Functions
-                const apiUrl = import.meta.env.VITE_API_URL || '';
-                const response = await fetch(`${apiUrl}/api/send-email`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: identifier,
-                        projectId,
-                        inviterName: inviter,
-                        projectTitle: title
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Email API error details: ${errorText}`);
-                    throw new Error(`Email API failed: ${response.statusText}`);
-                }
-
-                console.log(`DatabaseService: Email sent successfully to ${identifier}`);
-            }
-        } catch (e) {
-            console.error('Error in sendInvitation:', e);
-            // Fallback for missing table
-            const invites = getMockInvites();
-            if (!invites.some((inv: any) => (isEmail ? inv.email === identifier : inv.phone === identifier) && inv.projectId === projectId)) {
-                invites.push({ [isEmail ? 'email' : 'phone']: identifier, projectId });
-                saveMockInvites(invites);
-            }
-        }
+        return await apiRequest(`/api/projects/${projectId}/invitations/${encodeURIComponent(identifier)}`, {
+            method: 'DELETE'
+        });
     },
 
-    async checkAndProcessInvitations(userId: string, identifier: string) {
-        console.log(`DatabaseService: Checking invitations for ${identifier}`);
-        const MOCK_INVITES_KEY = 'everstory-mock-invitations';
+    async checkInvitations(userId: string, identifier: string) {
         const isEmail = identifier.includes('@');
-
-        const normalizePhone = (p: string) => {
-            const clean = p.replace(/\D/g, '');
-            if (clean.length === 11) return `+86${clean}`;
-            if (clean.startsWith('86') && clean.length === 13) return `+${clean}`;
-            return p;
-        };
-
-        // Normalize identifier
+        const normalizePhone = (p: string) => p.replace(/\D/g, '');
         const normalizedIdentifier = isEmail ? identifier.trim().toLowerCase() : normalizePhone(identifier);
 
-        const getMockInvites = () => {
-            const data = localStorage.getItem(MOCK_INVITES_KEY);
-            return data ? JSON.parse(data) : [];
-        };
-
-        const saveMockInvites = (invites: { phone?: string; email?: string; projectId: string }[]) => {
-            localStorage.setItem(MOCK_INVITES_KEY, JSON.stringify(invites));
-        };
-
-        // 1. Mock
-        const mockInvites = getMockInvites();
+        const mockInvites = getMockData('everstory-mock-invitations');
         const matching = mockInvites.filter((inv: any) => {
             const invEmail = inv.email?.trim().toLowerCase();
-            const invPhone = inv.phone?.trim();
+            const invPhone = inv.phone ? normalizePhone(inv.phone) : '';
             return isEmail ? invEmail === normalizedIdentifier : invPhone === normalizedIdentifier;
         });
 
@@ -832,155 +443,44 @@ export const databaseService = {
             await this.joinProject(invite.projectId, userId);
         }
 
-        // Remove processed mock invites
-        saveMockInvites(mockInvites.filter((inv: any) => {
+        saveMockData('everstory-mock-invitations', mockInvites.filter((inv: any) => {
             const invEmail = inv.email?.trim().toLowerCase();
-            const invPhone = inv.phone?.trim();
+            const invPhone = inv.phone ? normalizePhone(inv.phone) : '';
             return isEmail ? invEmail !== normalizedIdentifier : invPhone !== normalizedIdentifier;
         }));
-
-        // 2. Real - Check BOTH phone and email if available from profile
-        try {
-            // First, get full profile to have both identifiers
-            const { data: profile } = await supabase.from('profiles').select('email, phone').eq('id', userId).maybeSingle();
-
-            const identifiers = [];
-            if (profile?.email) identifiers.push({ field: 'email', value: profile.email.toLowerCase() });
-            if (profile?.phone) identifiers.push({ field: 'phone', value: profile.phone });
-            // Add the current identifier used for login if not already there
-            if (!identifiers.some(i => i.value === normalizedIdentifier)) {
-                identifiers.push({ field: isEmail ? 'email' : 'phone', value: normalizedIdentifier });
-            }
-
-            for (const idObj of identifiers) {
-                const { data: realInvites } = await (supabase
-                    .from('project_invitations') as any)
-                    .select('project_id')
-                    .eq(idObj.field, idObj.value);
-
-                if (realInvites && realInvites.length > 0) {
-                    console.log(`DatabaseService: Found ${realInvites.length} real invitations for ${idObj.value}`);
-                    for (const inv of realInvites) {
-                        await this.joinProject(inv.project_id, userId);
-                    }
-                    // Delete processed invitations
-                    await this.deleteInvitation(idObj.field, idObj.value);
-                }
-            }
-        } catch (e) {
-            console.error('DatabaseService: Error checking real invitations:', e);
-        }
-    },
-
-    async deleteInvitation(field: 'email' | 'phone', value: string) {
-        try {
-            await (supabase.from('project_invitations') as any).delete().eq(field, value);
-        } catch (e) {
-            console.error('Error deleting invitation:', e);
-        }
-    },
-
-    async getProjectInvitations(projectId: string) {
-        if (isMockUser(projectId)) {
-            const MOCK_INVITES_KEY = 'everstory-mock-invitations';
-            const data = localStorage.getItem(MOCK_INVITES_KEY);
-            const invites = data ? JSON.parse(data) : [];
-            return invites.filter((inv: any) => inv.projectId === projectId);
-        }
-
-        try {
-            const { data } = await (supabase.from('project_invitations') as any)
-                .select('phone, email')
-                .eq('project_id', projectId);
-            return data || [];
-        } catch (e) {
-            const MOCK_INVITES_KEY = 'everstory-mock-invitations';
-            const data = localStorage.getItem(MOCK_INVITES_KEY);
-            const invites = data ? JSON.parse(data) : [];
-            return invites.filter((inv: any) => inv.projectId === projectId);
-        }
     },
 
     async joinProject(projectId: string, userId: string) {
-        console.log(`DatabaseService: User ${userId} joining project ${projectId}`);
-        if (projectId.includes('mock-')) {
+        if (projectId.startsWith('mock-')) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             const project = projects.find((p: any) => p.id === projectId);
             if (project && !project.members.some((m: any) => m.userId === userId)) {
                 project.members.push({ id: 'member-' + Date.now(), userId, role: 'collaborator' });
                 saveMockData(MOCK_PROJECTS_KEY, projects);
-                console.log('DatabaseService: Mock project joined successfully');
             }
             return;
-        }
-
-        try {
-            const { data: existing, error: checkError } = await supabase
-                .from('project_members')
-                .select('id')
-                .eq('project_id', projectId)
-                .eq('user_id', userId)
-                .maybeSingle();
-
-            if (checkError) {
-                console.error('DatabaseService: Error checking existing membership:', checkError);
-                return;
-            }
-
-            if (!existing) {
-                const { error: insertError } = await supabase.from('project_members').insert({
-                    project_id: projectId,
-                    user_id: userId,
-                    role: 'collaborator'
-                });
-
-                if (insertError) {
-                    console.error('DatabaseService: Error inserting project member:', insertError);
-                    // This is where RLS might be failing
-                } else {
-                    console.log('DatabaseService: Real project joined successfully');
-                }
-            } else {
-                console.log('DatabaseService: User is already a member of this project');
-            }
-        } catch (e) {
-            console.error('DatabaseService: Unexpected error in joinProject:', e);
         }
     },
 
     async updateMemberRole(projectId: string, memberId: string, role: string) {
-        console.log(`DatabaseService: Updating member ${memberId} role to ${role} in project ${projectId}`);
-        if (projectId.includes('mock-')) {
+        if (projectId.startsWith('mock-')) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             const project = projects.find((p: any) => p.id === projectId);
             if (project) {
                 const member = project.members.find((m: any) => m.id === memberId);
                 if (member) {
-                    member.projectRole = role;
                     member.role = role;
                     saveMockData(MOCK_PROJECTS_KEY, projects);
                 }
             }
-            return;
         }
-
-        const { error } = await supabase
-            .from('project_members')
-            .update({ role })
-            .eq('id', memberId)
-            .eq('project_id', projectId);
-
-        if (error) throw error;
     },
 
-
     async ensureDefaultProject(userId: string, displayName: string) {
-        console.log(`DatabaseService: Ensuring default project for ${userId} (${displayName})`);
         try {
             const projects = await this.getProjects();
             if (projects.length === 0) {
-                console.log('DatabaseService: No projects found. Creating default project.');
-                const projectName = `${displayName}的故事`.replace(/\+86/g, ''); // Clean phone prefix if present
+                const projectName = `${displayName}的故事`.replace(/\+86/g, '');
                 await this.createProject(projectName, '我的第一个长生記项目');
             }
         } catch (e) {
@@ -988,160 +488,36 @@ export const databaseService = {
         }
     },
 
-    async syncProfile(userId: string, data: { full_name?: string; avatar_url?: string; phone?: string; email?: string; is_premium?: boolean }) {
-        console.log(`DatabaseService: Syncing profile for ${userId}`, data);
-        const { error } = await supabase
-            .from('profiles')
-            .upsert({
-                id: userId,
-                ...data,
-                updated_at: new Date().toISOString()
-            });
-
-        if (error) {
-            console.error('Error syncing profile:', error);
-            // Ignore error if table doesn't exist or other RLS issue for now to not block auth flow
-        }
+    async syncProfile(userId: string, data: any) {
+        // Handled by registration/me on backend
     },
 
     // --- Points System ---
     async getPoints() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return 0;
-
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('points')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (error) {
-            console.error('Error fetching points:', error);
+        try {
+            const data = await apiRequest('/api/auth/me');
+            return data.user?.points || 0;
+        } catch (e) {
             return 0;
         }
-        return data?.points || 0;
     },
 
     async getPointTransactions() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return [];
-
-        const { data, error } = await supabase
-            .from('point_transactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching transactions:', error);
-            return [];
-        }
-
-        return data.map(t => ({
-            id: t.id,
-            userId: t.user_id,
-            amount: t.amount,
-            type: t.type,
-            description: t.description,
-            createdAt: new Date(t.created_at).toLocaleDateString('zh-CN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            })
-        }));
+        return await apiRequest('/api/points/transactions');
     },
 
     async redeemCoupon(code: string) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('未登录');
-
-        const upperCode = code.trim().toUpperCase();
-        let amount = 0;
-        let description = '';
-
-        if (upperCode === 'EVERSTORY500') {
-            amount = 500;
-            description = '全能500元积分兑换券';
-        } else if (upperCode === 'ES-GIFT-1000-N7B2R9') {
-            amount = 1000;
-            description = '高端定制1000元积分兑换券';
-        } else if (upperCode === 'ES-PLATINUM-2000-W4X7V2') {
-            amount = 2000;
-            description = '至尊尊享2000元积分兑换券';
-        } else if (upperCode === 'COMPENSATION-NICK-399') {
-            amount = 399;
-            description = '订单支付异常补偿积分';
-        } else {
-            throw new Error('无效的兑换码');
-        }
-
-        // 1. Check if already redeemed (to prevent double redemption of "universal" codes if desired)
-        // For simplicity and "universal" requirement, we'll allow once per user.
-        const { data: existing } = await supabase
-            .from('point_transactions')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('description', description)
-            .maybeSingle();
-
-        if (existing) {
-            throw new Error('您已兑换过此礼品券');
-        }
-
-        // 2. Add transaction
-        const { error: txError } = await supabase
-            .from('point_transactions')
-            .insert({
-                user_id: user.id,
-                amount: amount,
-                type: 'earn',
-                description: description
-            });
-
-        if (txError) throw txError;
-
-        // 3. Update profile points
-        const currentPoints = await this.getPoints();
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ points: currentPoints + amount })
-            .eq('id', user.id);
-
-        if (profileError) throw profileError;
-
-        return { amount, description };
+        return await apiRequest('/api/points/redeem', {
+            method: 'POST',
+            body: JSON.stringify({ code })
+        });
     },
 
     async spendPoints(amount: number, description: string) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('未登录');
-
-        const currentPoints = await this.getPoints();
-        if (currentPoints < amount) throw new Error('积分不足');
-
-        // 1. Add transaction
-        const { error: txError } = await supabase
-            .from('point_transactions')
-            .insert({
-                user_id: user.id,
-                amount: amount,
-                type: 'spend',
-                description: description
-            });
-
-        if (txError) throw txError;
-
-        // 2. Update profile points
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ points: currentPoints - amount })
-            .eq('id', user.id);
-
-        if (profileError) throw profileError;
-
-        return true;
+        return await apiRequest('/api/points/spend', {
+            method: 'POST',
+            body: JSON.stringify({ amount, description })
+        });
     },
 
     // --- Interactions ---
@@ -1150,28 +526,13 @@ export const databaseService = {
             const interactions = getMockData(MOCK_INTERACTIONS_KEY);
             return interactions.filter((i: any) => i.storyId === storyId);
         }
-
-        const { data, error } = await supabase
-            .from('story_interactions')
-            .select(`
-                *,
-                user:profiles(full_name, avatar_url, phone)
-            `)
-            .eq('story_id', storyId)
-            .order('created_at', { ascending: true });
-
-        if (error) {
-            console.error('Error fetching interactions:', error);
-            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
-            return interactions.filter((i: any) => i.storyId === storyId);
-        }
-
-        return (data || []).map(i => ({
+        const data = await apiRequest(`/api/stories/${storyId}/interactions`);
+        return (data || []).map((i: any) => ({
             id: i.id,
             storyId: i.story_id,
             userId: i.user_id,
-            userName: i.user?.full_name || i.user?.phone || '未知用户',
-            userAvatar: i.user?.avatar_url,
+            userName: i.full_name || i.phone || '未知用户',
+            userAvatar: i.avatar_url,
             type: i.type,
             content: i.content,
             createdAt: i.created_at
@@ -1179,16 +540,11 @@ export const databaseService = {
     },
 
     async addStoryInteraction(storyId: string, type: 'like' | 'reaction', content?: string) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('未登录');
-
         if (storyId.startsWith('mock-')) {
             const interactions = getMockData(MOCK_INTERACTIONS_KEY);
             const newInteraction = {
                 id: 'mock-int-' + Date.now(),
                 storyId,
-                userId: user.id,
-                userName: user.user_metadata?.full_name || '访客',
                 type,
                 content,
                 createdAt: new Date().toISOString()
@@ -1197,80 +553,86 @@ export const databaseService = {
             saveMockData(MOCK_INTERACTIONS_KEY, interactions);
             return newInteraction;
         }
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name, avatar_url')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        const { data, error } = await supabase
-            .from('story_interactions')
-            .insert({
-                story_id: storyId,
-                user_id: user.id,
-                type,
-                content
-            })
-            .select()
-            .single();
-
-        if (error) {
-            console.warn('Supabase interaction failed, using mock fallback:', error);
-            const interactions = getMockData(MOCK_INTERACTIONS_KEY);
-            const newInteraction = {
-                id: 'mock-int-' + Date.now(),
-                storyId,
-                userId: user.id,
-                userName: profile?.full_name || user.user_metadata?.full_name || '访客',
-                userAvatar: profile?.avatar_url,
-                type,
-                content,
-                createdAt: new Date().toISOString()
-            };
-            interactions.push(newInteraction);
-            saveMockData(MOCK_INTERACTIONS_KEY, interactions);
-            return newInteraction;
-        }
-
-        return {
-            ...data,
-            userName: profile?.full_name || '我',
-            userAvatar: profile?.avatar_url
-        };
+        return await apiRequest(`/api/stories/${storyId}/interactions`, {
+            method: 'POST',
+            body: JSON.stringify({ type, content })
+        });
     },
 
     async getProjectInteractionHistory(projectId: string) {
         if (projectId.startsWith('mock-')) {
-            // For mock, just return all interactions for now as we don't have story-project mapping easily here
             return getMockData(MOCK_INTERACTIONS_KEY);
         }
-
-        const { data, error } = await supabase
-            .from('story_interactions')
-            .select(`
-                *,
-                user:profiles(full_name, avatar_url, phone),
-                story:stories!inner(title, project_id)
-            `)
-            .eq('story.project_id', projectId)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching interaction history:', error);
-            return getMockData(MOCK_INTERACTIONS_KEY);
-        }
-
-        return (data || []).map(i => ({
+        const data = await apiRequest(`/api/projects/${projectId}/interactions`);
+        return (data || []).map((i: any) => ({
             id: i.id,
             storyId: i.story_id,
-            storyTitle: (i.story as any)?.title,
+            storyTitle: i.story_title,
             userId: i.user_id,
-            userName: i.user?.full_name || i.user?.phone || '未知用户',
-            userAvatar: i.user?.avatar_url,
+            userName: i.full_name || i.phone || '未知用户',
+            userAvatar: i.avatar_url,
             type: i.type,
             content: i.content,
             createdAt: i.created_at
         }));
+    },
+
+    // --- Storage ---
+    async getUploadUrl(fileName: string, fileType: string) {
+        return await apiRequest('/api/storage/upload-url', {
+            method: 'POST',
+            body: JSON.stringify({ fileName, fileType })
+        });
+    },
+
+    async uploadFile(base64Data: string, fileName: string, fileType: string) {
+        return await apiRequest('/api/storage/upload', {
+            method: 'POST',
+            body: JSON.stringify({ base64Data, fileName, fileType })
+        });
+    },
+
+    async uploadMedia(file: File | Blob, path: string, contentType?: string) {
+        // Compatibility wrapper: convert File/Blob to base64 and use uploadFile
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    const base64Data = (reader.result as string).split(',')[1];
+                    const fileName = path.split('/').pop() || 'file';
+                    const fileType = contentType || (file instanceof File ? file.type : 'application/octet-stream');
+                    const result = await this.uploadFile(base64Data, fileName, fileType);
+                    resolve(result.url);
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    },
+
+    async uploadPhoto(projectId: string, file: File) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `prompts/${projectId}/${fileName}`;
+        return await this.uploadMedia(file, filePath);
+    },
+
+    async downloadMedia(url: string) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch media: ${response.statusText}`);
+        return await response.blob();
+    },
+
+    getCurrentUserId() {
+        const token = getToken();
+        if (!token) return null;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.id || payload.sub;
+        } catch (e) {
+            return null;
+        }
     }
 };

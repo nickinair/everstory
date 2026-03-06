@@ -29,8 +29,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAvatarUrl } from './lib/avatar';
-import { ViewType, Story, Prompt, Order, Project, User } from './types';
-import { supabase } from './lib/supabaseClient';
+import { Story, Prompt, Order, Project, User, ViewType } from './types';
 import { databaseService } from './services/databaseService';
 import AuthView from './components/AuthView';
 import InviteModal from './components/InviteModal';
@@ -111,27 +110,17 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check initial session
+    databaseService.getSession().then((session) => {
       console.log('App: Initial Session State:', session?.user?.id);
       setSession(session);
       if (session) fetchUserData(session.user.id);
       else setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('App: Auth State Changed:', _event, session?.user?.id);
-      setSession(session);
-      if (session) fetchUserData(session.user.id, false); // Fetch in background on auth changes
-      else {
-        setLoading(false);
-        setProjects([]);
-        setCurrentUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    // Note: Custom JWT auth doesn't have a real-time onAuthStateChange.
+    // We rely on login/logout actions and page reloads for now.
+    // In a full implementation, we might use a simple EventEmitter or Context.
   }, []);
 
   const fetchUserData = async (userId: string, showLoading = true) => {
@@ -141,23 +130,19 @@ export default function App() {
 
       if (userId.startsWith('mock-')) {
         console.log('App: Using mock profile data');
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = await databaseService.getSession();
         setCurrentUser({
           id: userId,
-          full_name: session?.user?.user_metadata?.full_name || '测试用户',
-          phone: session?.user?.user_metadata?.phone || '',
+          full_name: (session as any)?.user?.full_name || '测试用户',
+          phone: (session as any)?.user?.phone || '',
           avatar_url: ''
         } as any);
       } else {
-        // 1. Fetch Profile
-        const { data: profile, error: profileErr } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-        if (profileErr) {
-          console.error('App: Profile Fetch Error:', profileErr);
-        }
-        if (profile) {
-          setCurrentUser(profile);
+        // 1. Fetch Profile (already fetched in getSession, but we can call /api/auth/me specifically if needed)
+        const session = await databaseService.getSession();
+        if (session && session.user) {
+          setCurrentUser(session.user);
         } else {
-          // Fallback for missing profile
           console.warn('App: No profile found for user:', userId);
           setCurrentUser({ id: userId, phone: 'Unknown', full_name: '新用户' } as any);
         }
@@ -796,7 +781,7 @@ export default function App() {
                   setCurrentView('project-detail');
                 }}
                 onProjectCreated={() => {
-                  fetchUserData(session.user.id);
+                  if (databaseService.getCurrentUserId()) fetchUserData(databaseService.getCurrentUserId());
                 }}
               />
             )}
