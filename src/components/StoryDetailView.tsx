@@ -445,15 +445,18 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                     }}
                   />
                   {story.type === 'audio' && (
-                    <audio
-                      key={story.videoUrl}
-                      ref={mediaRef as React.RefObject<HTMLAudioElement>}
-                      src={story.videoUrl}
-                      onTimeUpdate={handleTimeUpdate}
-                      onLoadedMetadata={handleLoadedMetadata}
-                      onEnded={() => setIsPlaying(false)}
-                      controls
-                    />
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-20">
+                      <audio
+                        key={story.videoUrl}
+                        ref={mediaRef as React.RefObject<HTMLAudioElement>}
+                        src={story.videoUrl}
+                        onTimeUpdate={handleTimeUpdate}
+                        onLoadedMetadata={handleLoadedMetadata}
+                        onEnded={() => setIsPlaying(false)}
+                        controls
+                        className="w-full opacity-60 hover:opacity-100 transition-opacity rounded-full bg-white/20 backdrop-blur-md"
+                      />
+                    </div>
                   )}
                 </div>
               )}
