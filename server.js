@@ -491,7 +491,6 @@ app.post('/api/auth/update-phone', async (req, res) => {
 const VOLC_ARK_API_KEY = process.env.VOLC_ARK_API_KEY;
 const VOLC_ARK_ENDPOINT_ID = process.env.VOLC_ARK_ENDPOINT_ID;
 const VOLC_ASR_APP_ID = process.env.VOLC_ASR_APP_ID;
-const VOLC_ASR_CLUSTER_ID = process.env.VOLC_ASR_CLUSTER_ID || 'volc_asr_2.0_video';
 
 // LLM Helper (OpenAI compatible)
 async function callDoubaoLLM(prompt, options = {}) {
@@ -500,6 +499,8 @@ async function callDoubaoLLM(prompt, options = {}) {
   if (!VOLC_ARK_API_KEY || !VOLC_ARK_ENDPOINT_ID) {
     throw new Error('Volcengine LLM configuration missing');
   }
+
+  console.log(`[LLM] Request with endpoint: ${VOLC_ARK_ENDPOINT_ID}`);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -510,72 +511,62 @@ async function callDoubaoLLM(prompt, options = {}) {
     body: JSON.stringify({
       model: VOLC_ARK_ENDPOINT_ID,
       messages: [
-        { role: 'system', content: '你是一位专业的速记员、编辑和故事创作者，擅长处理老年人回忆录。' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
+      max_tokens: 4000,
       ...options
     })
   });
 
   const data = await response.json();
   if (!response.ok) {
+    console.error('[LLM] Error:', JSON.stringify(data));
     throw new Error(data.error?.message || 'Doubao Ark API request failed');
   }
   return data.choices[0].message.content;
 }
 
-// ASR Helper (Short Audio / Extreme Version - Single Request)
+// ASR Helper (Based on user-provided reference v1/recognize)
 async function callDoubaoASR(base64Data, mimeType) {
-  // Volcengine ASR 2.0 (Big Model / Flash version)
-  const url = 'https://openspeech.volcengine.com/api/v3/auc/bigmodel/recognize/flash';
+  // Reference endpoint: https://openspeech.bytedance.com/api/v1/recognize
+  const url = 'https://openspeech.bytedance.com/api/v1/recognize';
 
   if (!VOLC_ARK_API_KEY || !VOLC_ASR_APP_ID) {
-    throw new Error('Volcengine ASR configuration missing');
+    throw new Error('Volcengine ASR configuration (API Key or AppID) missing');
   }
 
-  console.log(`[ASR] Initiating v3 request - AppId: ${VOLC_ASR_APP_ID}`);
+  console.log(`[ASR] Initiating v1 request - AppId: ${VOLC_ASR_APP_ID}`);
 
   try {
+    // Convert base64 to buffer for multipart upload
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    // We use standard FormData which is available in Node 18+
+    const formData = new FormData();
+    // In Node fetch, we can append a Blob
+    const blob = new Blob([buffer], { type: 'audio/wav' });
+    formData.append('audio', blob, 'audio.wav');
+    formData.append('appid', VOLC_ASR_APP_ID);
+    formData.append('language', 'zh-CN');
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'X-Api-App-Key': VOLC_ASR_APP_ID,
-        'X-Api-Access-Key': VOLC_ARK_API_KEY,
-        'X-Api-Resource-Id': 'volc.bigasr.auc_turbo', // Fixed value for Turbo ASR
-        'X-Api-Connect-Id': crypto.randomUUID()
+        'Authorization': `Bearer ${VOLC_ARK_API_KEY}`
+        // Content-Type is set automatically for FormData
       },
-      body: JSON.stringify({
-        user: { uid: 'everstory_user' },
-        audio: {
-          format: 'wav',
-          data: base64Data
-        },
-        request: {
-          model_name: 'built-in-model'
-        }
-      })
+      body: formData
     });
 
-    const responseText = await response.text();
-    console.log('[ASR] Raw response body:', responseText);
+    const data = await response.json();
+    console.log('[ASR] Response:', JSON.stringify(data));
 
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('[ASR] Failed to parse response as JSON:', responseText);
-      throw new Error(`Invalid JSON response from ASR API: ${responseText.substring(0, 100)}`);
-    }
-
-    if (!response.ok || (data.code !== 1000 && data.code !== 0)) {
-      console.error('[ASR] API Error:', JSON.stringify(data));
+    if (!response.ok || data.code !== 1000) {
       throw new Error(data.message || `ASR API error (code: ${data.code})`);
     }
 
-    // Result path: data.result.text
-    return data.result?.text || data.text || "";
+    return data.text || (data.result && data.result.text) || "";
   } catch (error) {
     console.error('[ASR] Request failed:', error);
     throw error;
@@ -586,7 +577,7 @@ app.post('/api/ai/process', async (req, res) => {
   const { action, payload } = req.body;
 
   try {
-    console.log(`AI Processing - Action: ${action}`);
+    console.log(`[Proxy] AI Action: ${action}`);
     let result;
     switch (action) {
       case 'generateStory':
@@ -607,7 +598,7 @@ app.post('/api/ai/process', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    console.error(`Doubao AI Error (${action}):`, error);
+    console.error(`[Proxy] Doubao Error (${action}):`, error);
     res.status(500).json({ error: error.message || 'AI processing failed' });
   }
 });
