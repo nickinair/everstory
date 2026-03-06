@@ -226,7 +226,7 @@ export default function AuthView() {
                                 writingMode: 'vertical-rl'
                             }}
                         >
-                            AI 驱动的家族记忆空间
+                            你的 AI 传记作家
                         </span>
                     </div>
 
@@ -258,7 +258,7 @@ export default function AuthView() {
                         <div className="text-center mb-10">
                             <h1 className="text-4xl font-serif text-gray-800 mb-2 font-light tracking-[0.3em] pl-[0.3em]">长生記</h1>
                             <p className="text-[14px] text-gray-400 tracking-[0.1em] uppercase">
-                                时光会老 记忆永存
+                                只属于你的传记
                             </p>
                         </div>
 

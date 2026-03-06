@@ -1,10 +1,10 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI } from "@google/genai";
 import tencentcloud from 'tencentcloud-sdk-nodejs-sms';
 import { createClient } from '@supabase/supabase-js';
 
@@ -491,12 +491,16 @@ app.post('/api/auth/update-phone', async (req, res) => {
 const VOLC_ARK_API_KEY = process.env.VOLC_ARK_API_KEY;
 const VOLC_ARK_ENDPOINT_ID = process.env.VOLC_ARK_ENDPOINT_ID;
 const VOLC_ASR_APP_ID = process.env.VOLC_ASR_APP_ID;
-const VOLC_ASR_TOKEN = process.env.VOLC_ARK_API_KEY; // Often Ark API Key can be used, or a separate ASR token
 const VOLC_ASR_CLUSTER_ID = process.env.VOLC_ASR_CLUSTER_ID || 'volc_asr_2.0_video';
 
 // LLM Helper (OpenAI compatible)
 async function callDoubaoLLM(prompt, options = {}) {
   const url = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
+
+  if (!VOLC_ARK_API_KEY || !VOLC_ARK_ENDPOINT_ID) {
+    throw new Error('Volcengine LLM configuration missing');
+  }
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -523,58 +527,66 @@ async function callDoubaoLLM(prompt, options = {}) {
 
 // ASR Helper (Short Audio / Extreme Version - Single Request)
 async function callDoubaoASR(base64Data, mimeType) {
-  // For larger files, we might need the polling version, but for "transcribe" action 
-  // which usually handles recording snippets, the extreme/fast version is better.
-  // Note: Doubao ASR 2.0 often requires specific SDK or signing for binary uploads.
-  // Here we use the simplified Token-based submission if available, otherwise we use a fallback or explain.
+  // Volcengine ASR 2.0 (Big Model / Flash version)
+  const url = 'https://openspeech.volcengine.com/api/v3/auc/bigmodel/recognize/flash';
 
-  // Implementation note: Volcengine ASR 2.0 REST API typically requires a storage link.
-  // To support raw base64, we use the "extreme" (极速版) endpoint if applicable.
-  const url = 'https://openspeech.bytedance.com/api/v1/auc/execute';
-
-  // Note: This matches the "极速版" pattern. Some regions might differ.
-  // We'll use a simplified implementation. Real-world apps might use the SDK for binary streaming.
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer;${VOLC_ARK_API_KEY}` // Using token-based auth
-    },
-    body: JSON.stringify({
-      app: {
-        id: VOLC_ASR_APP_ID,
-        token: VOLC_ARK_API_KEY,
-        cluster: VOLC_ASR_CLUSTER_ID
-      },
-      user: { uid: 'everstory_user' },
-      audio: {
-        format: 'wav', // Defaulting to wav for recordings, should be dynamic if possible
-        data: base64Data
-      },
-      request: {
-        workflow: 'audio_transcribe',
-        result_type: 'full'
-      }
-    })
-  });
-
-  const data = await response.json();
-  if (!response.ok || data.code !== 1000) { // 1000 is success for some Volc APIs
-    console.error('ASR Error Data:', data);
-    throw new Error(data.message || 'Doubao ASR request failed');
+  if (!VOLC_ARK_API_KEY || !VOLC_ASR_APP_ID) {
+    throw new Error('Volcengine ASR configuration missing');
   }
-  return data.result.text;
+
+  console.log(`[ASR] Initiating v3 request - AppId: ${VOLC_ASR_APP_ID}`);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-App-Key': VOLC_ASR_APP_ID,
+        'X-Api-Access-Key': VOLC_ARK_API_KEY,
+        'X-Api-Resource-Id': 'volc.bigasr.auc_turbo', // Fixed value for Turbo ASR
+        'X-Api-Connect-Id': crypto.randomUUID()
+      },
+      body: JSON.stringify({
+        user: { uid: 'everstory_user' },
+        audio: {
+          format: 'wav',
+          data: base64Data
+        },
+        request: {
+          model_name: 'built-in-model'
+        }
+      })
+    });
+
+    const responseText = await response.text();
+    console.log('[ASR] Raw response body:', responseText);
+
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[ASR] Failed to parse response as JSON:', responseText);
+      throw new Error(`Invalid JSON response from ASR API: ${responseText.substring(0, 100)}`);
+    }
+
+    if (!response.ok || (data.code !== 1000 && data.code !== 0)) {
+      console.error('[ASR] API Error:', JSON.stringify(data));
+      throw new Error(data.message || `ASR API error (code: ${data.code})`);
+    }
+
+    // Result path: data.result.text
+    return data.result?.text || data.text || "";
+  } catch (error) {
+    console.error('[ASR] Request failed:', error);
+    throw error;
+  }
 }
 
 app.post('/api/ai/process', async (req, res) => {
   const { action, payload } = req.body;
 
-  if (!VOLC_ARK_API_KEY || !VOLC_ARK_ENDPOINT_ID) {
-    return res.status(500).json({ error: 'Volcengine Doubao not configured' });
-  }
-
   try {
-    console.log(`Doubao AI request - Action: ${action}`);
+    console.log(`AI Processing - Action: ${action}`);
     let result;
     switch (action) {
       case 'generateStory':
@@ -586,16 +598,7 @@ app.post('/api/ai/process', async (req, res) => {
       }
       case 'transcribe': {
         const { base64Data, mimeType } = payload;
-        // If it's the "media content" for Gemini, it might be large. 
-        // For now we try the ASR helper.
-        try {
-          result = await callDoubaoASR(base64Data, mimeType);
-        } catch (asrError) {
-          console.error('ASR failed, checking fallback or returning error:', asrError);
-          // Fallback to LLM if audio is actually just text or something? 
-          // No, ASR is specific.
-          throw asrError;
-        }
+        result = await callDoubaoASR(base64Data, mimeType);
         break;
       }
       default:
@@ -604,23 +607,14 @@ app.post('/api/ai/process', async (req, res) => {
 
     res.json({ result });
   } catch (error) {
-    console.error(`Doubao AI error (${action}):`, error);
+    console.error(`Doubao AI Error (${action}):`, error);
     res.status(500).json({ error: error.message || 'AI processing failed' });
   }
 });
 
-// Debug endpoint to list available models
-app.get('/api/ai/list-models', async (req, res) => {
-  if (!genAI) {
-    return res.status(500).json({ error: 'Gemini API not configured' });
-  }
-  try {
-    const response = await genAI.models.list();
-    res.json(response);
-  } catch (error) {
-    console.error('List models error:', error);
-    res.status(500).json({ error: error.message || 'Failed to list models', details: error.error });
-  }
+// Debug endpoint removed or fixed
+app.get('/api/ai/list-models', (req, res) => {
+  res.json({ message: 'Debug endpoint disabled during migration' });
 });
 
 // All other GET requests not handled before will serve index.html (SPA support)
