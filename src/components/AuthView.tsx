@@ -406,7 +406,7 @@ export default function AuthView() {
                             </div>
 
                             {/* SUBMIT BUTTON */}
-                            <div className="pt-6">
+                            <div className={`pt-6 ${mode === 'login' ? 'mt-auto' : ''}`}>
                                 <button
                                     type="submit"
                                     disabled={loading}
@@ -418,7 +418,7 @@ export default function AuthView() {
 
                                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (mode === 'login' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />)}
                                     <span className="relative z-10">
-                                        {mode === 'login' ? '立即登录' : mode === 'register' ? '立即注册' : '重置并登录'}
+                                        {mode === 'login' ? '立即登录' : mode === 'register' ? '立即注册' : '重置密码'}
                                     </span>
                                 </button>
                             </div>
