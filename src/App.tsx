@@ -164,6 +164,7 @@ export default function App() {
 
       // 2. Fetch Projects
       let userProjects = await databaseService.getProjects();
+      setProjects(userProjects as any);
 
       // Check for pending invite from URL OR localStorage
       const params = new URLSearchParams(window.location.search);
@@ -179,11 +180,6 @@ export default function App() {
         if (!isAlreadyMember) {
           console.log('App: User not member, showing confirmation UI');
           setPendingInviteProjectId(pendingInviteId);
-
-          // Clean URL now that we've captured it in state
-          if (window.location.search.includes('inviteProjectId')) {
-            window.history.replaceState({}, '', window.location.pathname);
-          }
         } else {
           console.log('App: User is already a member, clearing pending invite indicators');
           localStorage.removeItem('everstory-pending-invite');
@@ -192,8 +188,6 @@ export default function App() {
           }
         }
       }
-
-      setProjects(userProjects as any);
 
       let resolvedProjectId: string | null = currentProjectId; // Use current state (which came from localStorage)
 

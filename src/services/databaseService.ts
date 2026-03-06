@@ -68,40 +68,52 @@ export const databaseService = {
     },
 
     async getProjectById(projectId: string) {
+        if (!projectId) return null;
         if (isMockUser(projectId)) {
             const projects = getMockData(MOCK_PROJECTS_KEY);
             return projects.find((p: any) => p.id === projectId);
         }
 
-        // Use the RPC function to bypass RLS for previewing basic project info
-        const { data, error } = await supabase
-            .rpc('get_project_preview', { p_id: projectId });
+        try {
+            // Use the RPC function to bypass RLS for previewing basic project info
+            const { data, error } = await supabase
+                .rpc('get_project_preview', { p_id: projectId });
 
-        if (error) {
-            console.error('Error in get_project_preview RPC:', error);
-            // Fallback to normal select if RPC fails or is not yet migrated
-            const { data: fallbackData, error: fallbackError } = await supabase
-                .from('projects')
-                .select(`
-                    *,
-                    owner:profiles(*)
-                `)
-                .eq('id', projectId)
-                .maybeSingle();
+            if (error) {
+                console.error('Error in get_project_preview RPC:', error);
+                // Fallback to normal select if RPC fails or is not yet migrated
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('projects')
+                    .select(`
+                        id,
+                        name,
+                        description,
+                        owner_id,
+                        created_at
+                    `)
+                    .eq('id', projectId)
+                    .maybeSingle();
 
-            if (fallbackError) throw fallbackError;
-            if (!fallbackData) return null;
-            return {
-                id: fallbackData.id,
-                name: fallbackData.name,
-                description: fallbackData.description,
-                ownerId: fallbackData.owner_id,
-                ownerName: fallbackData.owner?.full_name || '未知主人',
-                createdAt: new Date(fallbackData.created_at).toLocaleDateString('zh-CN')
-            };
+                if (fallbackError) {
+                    console.error('Fallback fetch error:', fallbackError);
+                    return null;
+                }
+                if (!fallbackData) return null;
+                return {
+                    id: fallbackData.id,
+                    name: fallbackData.name,
+                    description: fallbackData.description,
+                    ownerId: fallbackData.owner_id,
+                    ownerName: '项目成员',
+                    createdAt: new Date(fallbackData.created_at).toLocaleDateString('zh-CN')
+                };
+            }
+
+            return data; // RPC returns the JSON object directly (or null)
+        } catch (err) {
+            console.error('Unexpected error in getProjectById:', err);
+            return null;
         }
-
-        return data; // RPC returns the JSON object directly (or null)
     },
 
     async createProject(name: string, description: string) {

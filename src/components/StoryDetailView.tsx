@@ -474,7 +474,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
         </div>
 
         {/* Right Side: Content & Transcript */}
-        <div className="w-full lg:basis-[40%] bg-white flex flex-col flex-1 lg:h-full shadow-2xl relative">
+        <div className="w-full lg:basis-[40%] bg-white flex flex-col flex-1 lg:h-full lg:min-h-0 shadow-2xl relative min-h-0">
           <div className="px-4 py-2 lg:px-6 lg:py-4 flex justify-between items-center border-b border-gray-100 shrink-0">
             <div className="flex-1 flex items-center overflow-x-auto scrollbar-hide space-x-2 mr-3">
               <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 border-accent/20 overflow-hidden shrink-0 shadow-sm cursor-pointer">
@@ -575,7 +575,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
             </div>
           </div>
 
-          <div className={`flex-1 ${isEditing ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'} px-6 py-4 lg:p-10 space-y-4 lg:space-y-8 relative`}>
+          <div className={`flex-1 ${isEditing ? 'flex flex-col' : ''} overflow-y-auto px-6 py-4 lg:p-10 space-y-4 lg:space-y-8 relative min-h-0`}>
             <AnimatePresence>
               {assistantStep === 'settings' && (
                 <motion.div
