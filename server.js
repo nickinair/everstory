@@ -661,7 +661,11 @@ async function callDoubaoASR(base64Data, mimeType) {
           if (code === 1000) {
             // Success!
             console.log(`[Doubao ASR] Job ${jobId} finished.`);
-            resolve(queryRes.data.resp.text || "");
+            const finalResp = queryRes.data.resp || {};
+            const finalResult = queryRes.data.result || finalResp.result || {};
+
+            const transcribedText = finalResult.text || finalResp.text || "";
+            resolve(transcribedText);
           } else if (code === 2000) {
             if (attempts >= maxAttempts) {
               reject(new Error("ASR Polling timeout"));
