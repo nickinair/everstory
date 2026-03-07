@@ -220,14 +220,13 @@ export const databaseService = {
         const data = await apiRequest(`/api/projects/${projectId}/stories`);
         return (data || []).map((s: any) => {
             const metadata = s.metadata || {};
-            let videoUrl = metadata.videoUrl || (s.type === 'video' ? s.image_url : undefined);
             return {
                 id: s.id,
                 projectId: s.project_id,
                 title: s.title,
                 content: s.content,
-                imageUrl: s.image_url,
-                videoUrl: videoUrl,
+                imageUrl: s.imageUrl || s.cover_url || s.image_url,
+                videoUrl: s.audio_url || metadata.videoUrl,
                 type: s.type,
                 pages: s.pages,
                 date: new Date(s.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -250,8 +249,8 @@ export const databaseService = {
             projectId: s.project_id,
             title: s.title,
             content: s.content,
-            imageUrl: s.image_url,
-            videoUrl: metadata.videoUrl,
+            imageUrl: s.imageUrl || s.cover_url || s.image_url,
+            videoUrl: s.audio_url || metadata.videoUrl,
             type: s.type,
             pages: s.pages,
             date: new Date(s.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
@@ -279,16 +278,16 @@ export const databaseService = {
             body: JSON.stringify({
                 ...story,
                 image_url: story.imageUrl,
+                cover_url: story.imageUrl,
                 metadata: {
                     ...story.metadata,
-                    videoUrl: story.videoUrl,
                     additionalImages: story.additionalImages || []
                 }
             })
         });
         return {
             ...data,
-            imageUrl: data.image_url,
+            imageUrl: data.imageUrl || data.cover_url || data.image_url,
             date: new Date(data.created_at).toLocaleDateString('zh-CN')
         } as Story;
     },
@@ -345,22 +344,24 @@ export const databaseService = {
         })) as Prompt[];
     },
 
-    async createPrompt(projectId: string, prompt: Partial<Prompt>) {
+    async createPrompt(projectId: string, question: string, category: string = '自定义', imageUrl?: string) {
         if (projectId.startsWith('mock-')) {
             const newPrompt = {
                 id: 'mock-prompt-' + Date.now(),
                 projectId,
-                ...prompt,
+                question,
+                category,
+                imageUrl,
                 sentDate: new Date().toISOString()
             };
             const prompts = getMockData(MOCK_PROMPTS_KEY);
             prompts.push(newPrompt);
             saveMockData(MOCK_PROMPTS_KEY, prompts);
-            return newPrompt as Prompt;
+            return newPrompt as any;
         }
         return await apiRequest(`/api/projects/${projectId}/prompts`, {
             method: 'POST',
-            body: JSON.stringify(prompt)
+            body: JSON.stringify({ question, category, image_url: imageUrl })
         });
     },
 

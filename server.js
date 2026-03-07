@@ -725,8 +725,8 @@ app.delete('/api/projects/:id', authenticate, async (req, res) => {
 
 app.get('/api/projects/:projectId/stories', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query( // Changed to destructure for MySQL result format
-      'SELECT * FROM stories WHERE project_id = ? ORDER BY created_at DESC', // Changed $1 to ?
+    const [rows] = await pool.query(
+      'SELECT *, cover_url as imageUrl FROM stories WHERE project_id = ? ORDER BY created_at DESC',
       [req.params.projectId]
     );
     res.json(rows);
@@ -755,7 +755,7 @@ app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
       ]
     );
     const storyId = result.insertId;
-    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [storyId]);
+    const [rows] = await pool.query('SELECT *, cover_url as imageUrl FROM stories WHERE id = ?', [storyId]);
     res.json(rows[0]);
   } catch (error) {
     console.error('Create Story Error:', error);
@@ -765,7 +765,7 @@ app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
 
 app.get('/api/stories/:id', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [req.params.id]); // Changed $1 to ?
+    const [rows] = await pool.query('SELECT *, cover_url as imageUrl FROM stories WHERE id = ?', [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: '故事不存在' });
     res.json(rows[0]);
   } catch (error) {
@@ -795,7 +795,7 @@ app.patch('/api/stories/:id', authenticate, async (req, res) => {
       ]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: '故事不存在' });
-    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [req.params.id]);
+    const [rows] = await pool.query('SELECT *, cover_url as imageUrl FROM stories WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (error) {
     console.error('Update Story Error:', error);
@@ -809,6 +809,57 @@ app.delete('/api/stories/:id', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: '删除故事失败' });
+  }
+});
+
+// --- Interaction Endpoints ---
+
+app.get('/api/stories/:storyId/interactions', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT i.*, p.full_name, p.phone, p.avatar_url 
+       FROM story_interactions i
+       JOIN profiles p ON i.user_id = p.id
+       WHERE i.story_id = ?
+       ORDER BY i.created_at DESC`,
+      [req.params.storyId]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get Interactions Error:', error);
+    res.status(500).json({ error: '获取互动记录失败' });
+  }
+});
+
+app.post('/api/stories/:storyId/interactions', authenticate, async (req, res) => {
+  const { type, content } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO story_interactions (story_id, user_id, type, content) VALUES (?, ?, ?, ?)',
+      [req.params.storyId, req.user.id, type, content]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Add Interaction Error:', error);
+    res.status(500).json({ error: '添加互动失败' });
+  }
+});
+
+app.get('/api/projects/:projectId/interactions', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT i.*, p.full_name, p.phone, p.avatar_url, s.title as story_title
+       FROM story_interactions i
+       JOIN profiles p ON i.user_id = p.id
+       JOIN stories s ON i.story_id = s.id
+       WHERE s.project_id = ?
+       ORDER BY i.created_at DESC`,
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get Project Interactions Error:', error);
+    res.status(500).json({ error: '获取项目互动历史失败' });
   }
 });
 
@@ -828,15 +879,17 @@ app.get('/api/projects/:projectId/prompts', authenticate, async (req, res) => {
 
 app.post('/api/projects/:projectId/prompts', authenticate, async (req, res) => {
   const { question, image_url, category, status } = req.body;
+  const promptId = req.body.id || crypto.randomUUID();
   try {
-    const [result] = await pool.query(
-      `INSERT INTO prompts (project_id, question, image_url, category, status)
-       VALUES (?, ?, ?, ?, ?)`,
-      [req.params.projectId, question, image_url, category, status || 'sent']
+    await pool.query(
+      `INSERT INTO prompts (id, project_id, question, image_url, category, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [promptId, req.params.projectId, question, image_url, category, status || 'sent']
     );
-    const [rows] = await pool.query('SELECT * FROM prompts WHERE id = ?', [result.insertId || req.body.id]); // Adjust if using UUIDs
+    const [rows] = await pool.query('SELECT * FROM prompts WHERE id = ?', [promptId]);
     res.json(rows[0]);
   } catch (error) {
+    console.error('Create Prompt Error:', error);
     res.status(500).json({ error: '创建提示词失败' });
   }
 });
