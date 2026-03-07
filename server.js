@@ -1163,23 +1163,49 @@ async function convertAudioToWav(inputPath, outputPath) {
 }
 
 async function callDoubaoASR(base64Data, mimeType) {
-  const originalFormat = mimeType.includes('webm') ? 'webm' : (mimeType.includes('mp4') ? 'mp4' : 'wav');
   const tempId = crypto.randomUUID();
-  const tempInputPath = path.join(os.tmpdir(), `audio_in_${tempId}.${originalFormat}`);
+
+  // Browser MediaRecorder always produces WebM, regardless of the reported MIME type.
+  // It may report 'video/mp4;codecs=avc1,opus' but the actual container is always WebM.
+  // Saving as .webm allows ffmpeg to correctly demux the audio track.
+  const tempInputPath = path.join(os.tmpdir(), `audio_in_${tempId}.webm`);
   const tempOutputPath = path.join(os.tmpdir(), `audio_out_${tempId}.wav`);
 
   try {
     // 1. Write base64 audio to temp input file
     const buffer = Buffer.from(base64Data, 'base64');
     fs.writeFileSync(tempInputPath, buffer);
-    console.log(`[Doubao ASR] Temp input audio created: ${tempInputPath} (Format: ${originalFormat})`);
+    console.log(`[Doubao ASR] Temp input created: ${tempInputPath} (original mime: ${mimeType})`);
 
     // 2. Convert to standard WAV (16kHz, Mono) for Volcengine
-    console.log(`[Doubao ASR] ⚙️ Converting to standard WAV format via ffmpeg...`);
-    await convertAudioToWav(tempInputPath, tempOutputPath);
-    console.log(`[Doubao ASR] ✅ Audio converted successfully: ${tempOutputPath}`);
+    console.log('[Doubao ASR] ⚙️ Converting to standard WAV via ffmpeg...');
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(tempInputPath)
+        .inputOptions([
+          '-f webm'  // Force input format detection as WebM
+        ])
+        .toFormat('wav')
+        .audioFrequency(16000)
+        .audioChannels(1)
+        .on('start', (cmd) => console.log('[Doubao ASR] ffmpeg command:', cmd))
+        .on('end', () => resolve())
+        .on('error', (err) => {
+          console.error('[Doubao ASR] ffmpeg error:', err.message);
+          // Retry without forced format if webm flag itself fails
+          ffmpeg(tempInputPath)
+            .toFormat('wav')
+            .audioFrequency(16000)
+            .audioChannels(1)
+            .on('end', () => resolve())
+            .on('error', (err2) => reject(err2))
+            .save(tempOutputPath);
+        })
+        .save(tempOutputPath);
+    });
+    console.log('[Doubao ASR] ✅ Audio converted successfully');
 
-    // 3. Instead of form-data, encode the converted WAV to base64 for V3 BigModel API
+    // 3. Encode converted WAV to base64 for V3 BigModel API
     const wavBuffer = fs.readFileSync(tempOutputPath);
     const base64Audio = wavBuffer.toString('base64');
 
@@ -1190,7 +1216,7 @@ async function callDoubaoASR(base64Data, mimeType) {
         format: 'wav',
       },
       request: {
-        model_name: "bigmodel",
+        model_name: 'bigmodel',
         enable_itn: true
       }
     };
@@ -1203,11 +1229,10 @@ async function callDoubaoASR(base64Data, mimeType) {
       'X-Api-Sequence': '-1'
     };
 
-    // 4. Send Request directly to V3 flash endpoint
-    console.log("[Doubao ASR] 🔹 发送标准WAV录音至火山 V3 极速版大模型...");
+    // 4. Send Request to V3 flash endpoint
+    console.log('[Doubao ASR] 🔹 Sending WAV to Volcengine V3 BigModel...');
     const response = await axios.post(VOLC_CONFIG.FLASH_API, payload, { headers });
 
-    // Status code extraction
     const statusCode = response.headers['x-api-status-code'];
     const msg = response.headers['x-api-message'];
 
@@ -1217,22 +1242,19 @@ async function callDoubaoASR(base64Data, mimeType) {
 
     if (response.data && response.data.result) {
       const finalText = response.data.result.text || '';
-      console.log(`[Doubao ASR] ✅ 识别成功，文本长度：${finalText.length}字`);
-
-      // Cleanup
-      if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
-      if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
-
+      console.log(`[Doubao ASR] ✅ Recognition success, length: ${finalText.length}`);
       return finalText;
     } else {
-      throw new Error(`Volc API Error: 无返回文本, Response: ${JSON.stringify(response.data)}`);
+      throw new Error(`Volc API Error: no text returned. Response: ${JSON.stringify(response.data)}`);
     }
 
   } catch (error) {
-    if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
-    if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath);
-    console.error("[Doubao ASR] ❌ ASR识别失败：", error.message, error.response?.data ? JSON.stringify(error.response?.data, null, 2) : '');
+    console.error('[Doubao ASR] ❌ ASR failed:', error.message);
     throw error;
+  } finally {
+    // Always cleanup temp files
+    try { if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath); } catch (_) { }
+    try { if (fs.existsSync(tempOutputPath)) fs.unlinkSync(tempOutputPath); } catch (_) { }
   }
 }
 

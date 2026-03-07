@@ -153,6 +153,31 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     }
   }, [localVideoUrl]);
 
+  // Proactively download video as blob to fix playback issues with COS URLs missing Content-Type
+  useEffect(() => {
+    if (story.type !== 'video' || !localVideoUrl || videoBlobUrl) return;
+
+    let cancelled = false;
+    const loadBlob = async () => {
+      try {
+        const response = await fetch(localVideoUrl);
+        if (!response.ok || cancelled) return;
+        const blob = await response.blob();
+        if (!cancelled) {
+          // Force webm content type since browser MediaRecorder always produces WebM
+          const typedBlob = new Blob([blob], { type: 'video/webm' });
+          const url = URL.createObjectURL(typedBlob);
+          setVideoBlobUrl(url);
+        }
+      } catch (err) {
+        console.warn('Proactive video blob load failed, will rely on direct URL:', err);
+      }
+    };
+
+    loadBlob();
+    return () => { cancelled = true; };
+  }, [localVideoUrl, story.type]);
+
   // Fetch interactions
   useEffect(() => {
     const fetchInteractions = async () => {
