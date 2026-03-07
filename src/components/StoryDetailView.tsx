@@ -56,9 +56,14 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState<'none' | 'settings'>('none');
   const [assistantMode, setAssistantMode] = useState<'first' | 'third' | 'cleaned'>('cleaned');
+  const isTranscribingPlaceholder = (content?: string, title?: string) =>
+    (content || '').includes('AI 正在记录你的心声') ||
+    (content || '').includes('AI 正在为您转换语音') ||
+    (title || '').includes('正在生成标题');
   const [editedTitle, setEditedTitle] = useState(story.title);
   const [editedContent, setEditedContent] = useState(story.content || '');
-  const [isTranscribing, setIsTranscribing] = useState((story.content || '').includes('AI 正在记录你的心声'));
+  const [localVideoUrl, setLocalVideoUrl] = useState<string | undefined>(story.videoUrl);
+  const [isTranscribing, setIsTranscribing] = useState(isTranscribingPlaceholder(story.content, story.title));
   const [additionalImages, setAdditionalImages] = useState<string[]>(story.additionalImages || []);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isReTranscribing, setIsReTranscribing] = useState(false);
@@ -107,8 +112,10 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
 
   useEffect(() => {
     if (!isEditing && !isGenerating && !isSaving && !hasManuallySaved) {
-      setEditedTitle(story.title);
-      setEditedContent(story.content || '');
+      if (!isTranscribingPlaceholder(story.content, story.title)) {
+        setEditedTitle(story.title);
+        setEditedContent(story.content || '');
+      }
     }
   }, [story.title, story.content, isEditing, isGenerating, isSaving, hasManuallySaved]);
 
@@ -121,9 +128,11 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
 
         try {
           const updatedStory = await databaseService.getStory(story.id);
-          if (updatedStory && updatedStory.content && !updatedStory.content.includes('AI 正在记录你的心声')) {
-            setEditedContent(updatedStory.content);
+          if (updatedStory && !isTranscribingPlaceholder(updatedStory.content, updatedStory.title)) {
+            setEditedContent(updatedStory.content || '');
             setEditedTitle(updatedStory.title || story.title);
+            if (updatedStory.videoUrl) setLocalVideoUrl(updatedStory.videoUrl);
+            if (updatedStory.imageUrl) setActiveImageUrl(updatedStory.imageUrl);
             setIsTranscribing(false);
             clearInterval(pollInterval);
           }
@@ -139,10 +148,10 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   }, [isTranscribing, story.id, isEditing]);
 
   useEffect(() => {
-    if (mediaRef.current && story.videoUrl) {
+    if (mediaRef.current && localVideoUrl) {
       mediaRef.current.load();
     }
-  }, [story.videoUrl]);
+  }, [localVideoUrl]);
 
   // Fetch interactions
   useEffect(() => {
@@ -459,9 +468,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
             <div className="relative w-full max-w-5xl aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-2xl group">
               {story.type === 'video' ? (
                 <video
-                  key={videoBlobUrl || story.videoUrl}
+                  key={videoBlobUrl || localVideoUrl}
                   ref={mediaRef as React.RefObject<HTMLVideoElement>}
-                  src={videoBlobUrl || story.videoUrl || undefined}
+                  src={videoBlobUrl || localVideoUrl || undefined}
                   poster={story.imageUrl}
                   className="w-full h-full object-contain bg-black"
                   onTimeUpdate={handleTimeUpdate}
@@ -469,9 +478,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   onEnded={() => setIsPlaying(false)}
                   onError={async (e) => {
                     const error = (e.target as any).error;
-                    if (error?.code === 4 && !videoBlobUrl && story.videoUrl) {
+                    if (error?.code === 4 && !videoBlobUrl && localVideoUrl) {
                       try {
-                        const blob = await databaseService.downloadMedia(story.videoUrl);
+                        const blob = await databaseService.downloadMedia(localVideoUrl);
                         if (blob) {
                           const url = URL.createObjectURL(blob);
                           setVideoBlobUrl(url);
@@ -503,9 +512,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   {story.type === 'audio' && (
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-20">
                       <audio
-                        key={story.videoUrl}
+                        key={localVideoUrl}
                         ref={mediaRef as React.RefObject<HTMLAudioElement>}
-                        src={story.videoUrl}
+                        src={localVideoUrl}
                         onTimeUpdate={handleTimeUpdate}
                         onLoadedMetadata={handleLoadedMetadata}
                         onEnded={() => setIsPlaying(false)}
