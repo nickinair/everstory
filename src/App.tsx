@@ -943,8 +943,8 @@ export default function App() {
                 localStorage.removeItem('everstory-pending-invite');
 
                 // Cleanup invitation in DB
-                if (currentUser.email) await databaseService.deleteInvitation('email', currentUser.email);
-                if (currentUser.phone) await databaseService.deleteInvitation('phone', currentUser.phone);
+                if (currentUser.email) await databaseService.deleteInvitation(pendingInviteProjectId, currentUser.email);
+                if (currentUser.phone) await databaseService.deleteInvitation(pendingInviteProjectId, currentUser.phone);
               }
             }}
             onCancel={() => {

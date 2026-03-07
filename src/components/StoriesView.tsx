@@ -130,17 +130,25 @@ export default function StoriesView({
                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
               </div>
             ) : (
-              <img
-                src={story.imageUrl || (story.type === 'audio' ? '/audio_cover.png' : '')}
-                alt={story.title}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  if (story.type === 'audio') {
-                    (e.target as HTMLImageElement).src = '/audio_cover.png';
-                  }
-                }}
-              />
+              story.imageUrl && (story.imageUrl.startsWith('http') || story.imageUrl.startsWith('/')) ? (
+                <img
+                  src={story.imageUrl}
+                  alt={story.title}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    if (story.type === 'audio') {
+                      (e.target as HTMLImageElement).src = '/audio_cover.png';
+                    } else {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-stone-100 to-stone-200 flex items-center justify-center">
+                  <Mic className="w-8 h-8 text-stone-400" />
+                </div>
+              )
             )}
 
             {/* Play/Mic Indicator */}

@@ -474,6 +474,7 @@ export const databaseService = {
             }
             return;
         }
+        return await apiRequest(`/api/projects/${projectId}/join`, { method: 'POST' });
     },
 
     async updateMemberRole(projectId: string, memberId: string, role: string) {

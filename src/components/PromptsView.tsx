@@ -428,11 +428,12 @@ export default function PromptsView({
 
                   return (
                     <div className={`w-14 sm:w-16 h-14 sm:h-16 ${theme.color} rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden`}>
-                      {prompt.imageUrl && !isDefaultImage ? (
+                      {prompt.imageUrl && !isDefaultImage && (prompt.imageUrl.startsWith('http') || prompt.imageUrl.startsWith('/')) ? (
                         <img
                           src={prompt.imageUrl}
                           alt="Prompt"
                           className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                       ) : (
                         <Icon className={`w-7 h-7 sm:w-8 sm:h-8 ${theme.iconColor}`} />

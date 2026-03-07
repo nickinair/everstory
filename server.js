@@ -602,6 +602,7 @@ app.post('/api/points/redeem', authenticate, async (req, res) => {
   const validCodes = {
     'ES-GIFT-1000-N7B2R9': 1000,
     'EVERSTORY-500': 500,
+    'ES-PLATINUM-2000-W4X7V2': 2000,
   };
 
   const pointsToAdd = validCodes[code.toUpperCase()];
@@ -986,6 +987,29 @@ app.post('/api/projects/:projectId/orders', authenticate, async (req, res) => {
 
 // --- Project Members & Invitations ---
 
+app.post('/api/projects/:projectId/join', authenticate, async (req, res) => {
+  const { projectId } = req.params;
+  const userId = req.user.id;
+  try {
+    // Check if already a member
+    const [existing] = await pool.query(
+      'SELECT id FROM project_members WHERE project_id = ? AND user_id = ?',
+      [projectId, userId]
+    );
+    if (existing.length > 0) {
+      return res.json({ success: true, message: '已是成员' });
+    }
+    await pool.query(
+      'INSERT INTO project_members (project_id, user_id, role) VALUES (?, ?, ?)',
+      [projectId, userId, 'collaborator']
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Join Project Error:', error);
+    res.status(500).json({ error: '加入项目失败' });
+  }
+});
+
 app.get('/api/projects/:projectId/members', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -1025,6 +1049,19 @@ app.post('/api/projects/:projectId/invitations', authenticate, async (req, res) 
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.json({ success: true, message: '已存在邀请' });
     res.status(500).json({ error: '创建邀请失败' });
+  }
+});
+
+app.delete('/api/projects/:projectId/invitations/:identifier', authenticate, async (req, res) => {
+  const { projectId, identifier } = req.params;
+  try {
+    await pool.query(
+      'DELETE FROM project_invitations WHERE project_id = ? AND (email = ? OR phone = ?)',
+      [projectId, identifier, identifier]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: '删除邀请失败' });
   }
 });
 
