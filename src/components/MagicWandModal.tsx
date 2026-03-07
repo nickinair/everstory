@@ -30,7 +30,7 @@ export const MagicWandModal: React.FC<MagicWandModalProps> = ({ isOpen, onClose,
     const [tone, setTone] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [results, setResults] = useState<string[]>([]);
-    const [addedIndices, setAddedIndices] = useState<number[]>([]);
+    const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
 
     const toggleKeyword = (kw: string) => {
         if (keywords.includes(kw)) {
@@ -96,7 +96,7 @@ export const MagicWandModal: React.FC<MagicWandModalProps> = ({ isOpen, onClose,
 
         setIsGenerating(true);
         setResults([]);
-        setAddedIndices([]);
+        setSelectedIndices([]);
 
         try {
             const questions = await generateGuidedPrompts(role, profession, keywords, tone);
@@ -108,9 +108,24 @@ export const MagicWandModal: React.FC<MagicWandModalProps> = ({ isOpen, onClose,
         }
     };
 
-    const handleAdd = (question: string, index: number) => {
-        onAddPrompt(question);
-        setAddedIndices([...addedIndices, index]);
+    const toggleSelection = (index: number) => {
+        if (selectedIndices.includes(index)) {
+            setSelectedIndices(selectedIndices.filter(i => i !== index));
+        } else {
+            setSelectedIndices([...selectedIndices, index]);
+        }
+    };
+
+    const handleSubmit = async () => {
+        for (const idx of selectedIndices) {
+            await onAddPrompt(results[idx]);
+        }
+        onClose();
+        // optionally reset if we want to reuse, but onClose usually unmounts or we can clean up
+        setTimeout(() => {
+            setResults([]);
+            setSelectedIndices([]);
+        }, 300);
     };
 
     // Shared styles for UI consistency
@@ -357,32 +372,41 @@ export const MagicWandModal: React.FC<MagicWandModalProps> = ({ isOpen, onClose,
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ delay: idx * 0.1 }}
                                                 key={idx}
-                                                className="group bg-white border border-stone-100 p-5 rounded-2xl shadow-sm hover:border-stone-800/10 hover:shadow-md transition-all flex items-center justify-between"
+                                                onClick={() => toggleSelection(idx)}
+                                                className={`group bg-white border p-5 rounded-2xl shadow-sm hover:shadow-md transition-all flex items-center justify-between cursor-pointer ${selectedIndices.includes(idx) ? 'border-stone-400/30 ring-1 ring-stone-800' : 'border-stone-100 hover:border-stone-800/10'
+                                                    }`}
                                             >
-                                                <p className="text-sm font-medium text-stone-800 leading-relaxed pr-4">{q}</p>
-                                                <button
-                                                    disabled={addedIndices.includes(idx)}
-                                                    onClick={() => handleAdd(q, idx)}
-                                                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${addedIndices.includes(idx)
+                                                <p className="text-sm font-medium text-stone-800 leading-relaxed pr-4 select-none">{q}</p>
+                                                <div
+                                                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${selectedIndices.includes(idx)
                                                         ? 'bg-stone-800 text-white'
-                                                        : 'bg-stone-50 text-stone-400 hover:bg-stone-800 hover:text-white'
+                                                        : 'bg-stone-50 text-stone-400 group-hover:bg-stone-200 group-hover:text-stone-600'
                                                         }`}
                                                 >
-                                                    {addedIndices.includes(idx) ? <Check className="w-4 h-4" /> : <Plus className="w-5 h-5" />}
-                                                </button>
+                                                    {selectedIndices.includes(idx) ? <Check className="w-4 h-4" /> : <Plus className="w-5 h-5" />}
+                                                </div>
                                             </motion.div>
                                         ))}
                                     </div>
-                                    <button
-                                        onClick={() => { setResults([]); setAddedIndices([]); }}
-                                        className="w-full py-4 text-sm font-bold text-stone-600 bg-stone-100 rounded-2xl hover:bg-stone-200 transition-colors cursor-pointer"
-                                    >
-                                        重置并重新生成
-                                    </button>
+                                    <div className="space-y-3 pt-2">
+                                        <button
+                                            disabled={selectedIndices.length === 0}
+                                            onClick={handleSubmit}
+                                            className="w-full py-4 text-sm font-bold text-white bg-stone-800 rounded-2xl hover:bg-stone-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                                        >
+                                            <Sparkles className="w-4 h-4" />
+                                            确认添加提示 ({selectedIndices.length})
+                                        </button>
+                                        <button
+                                            onClick={() => { setResults([]); setSelectedIndices([]); }}
+                                            className="w-full py-4 text-sm font-bold text-stone-600 bg-stone-100 rounded-2xl hover:bg-stone-200 transition-colors cursor-pointer"
+                                        >
+                                            重置并重新生成
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
-
                         {/* Footer */}
                         {results.length === 0 && !isGenerating && (
                             <div className="p-6 bg-stone-50 border-t border-stone-100">

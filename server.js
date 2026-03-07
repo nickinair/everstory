@@ -593,6 +593,44 @@ app.post('/api/auth/update-phone', authenticate, async (req, res) => {
   }
 });
 
+// --- Points Redemption ---
+app.post('/api/points/redeem', authenticate, async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: '请输入兑换码' });
+
+  // Simple hardcoded mapping
+  const validCodes = {
+    'ES-GIFT-1000-N7B2R9': 1000,
+    'EVERSTORY-500': 500,
+  };
+
+  const pointsToAdd = validCodes[code.toUpperCase()];
+  if (!pointsToAdd) return res.status(404).json({ error: '兑换码无效或已过期' });
+
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query('SELECT balance FROM points WHERE user_id = ?', [req.user.id]);
+    if (rows.length === 0) {
+      await connection.query('INSERT INTO points (user_id, balance) VALUES (?, ?)', [req.user.id, pointsToAdd]);
+    } else {
+      await connection.query('UPDATE points SET balance = balance + ? WHERE user_id = ?', [pointsToAdd, req.user.id]);
+    }
+    await connection.query('INSERT INTO points_history (user_id, type, points) VALUES (?, ?, ?)', [req.user.id, 'redemption', pointsToAdd]);
+
+    await connection.commit();
+    res.json({ success: true, points: pointsToAdd });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('Points redeem error:', error);
+    res.status(500).json({ error: '兑换失败，请稍后重试' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 // --- Storage Endpoints (Tencent COS) ---
 
 // Get pre-signed URL for upload
@@ -780,7 +818,7 @@ app.patch('/api/stories/:id', authenticate, async (req, res) => {
       `UPDATE stories SET 
         title = COALESCE(?, title), 
         content = COALESCE(?, content), 
-        cover_url = COALESCE(?, cover_url, image_url),
+        cover_url = COALESCE(?, cover_url),
         audio_url = COALESCE(?, audio_url),
         type = COALESCE(?, type),
         pages = COALESCE(?, pages),
@@ -960,6 +998,18 @@ app.get('/api/projects/:projectId/members', authenticate, async (req, res) => {
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: '获取成员失败' });
+  }
+});
+
+app.get('/api/projects/:projectId/invitations', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT email, phone, status FROM project_invitations WHERE project_id = ?',
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: '获取邀请记录失败' });
   }
 });
 

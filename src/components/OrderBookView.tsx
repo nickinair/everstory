@@ -727,7 +727,7 @@ export default function OrderBookView({ projectId, stories, hasOrder, onShowUpgr
         {step === 'addons' && (
           <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 max-w-6xl mx-auto py-4 lg:py-8">
             <div className="flex-1 space-y-6 lg:space-y-8">
-              <h2 className="text-lg lg:text-4xl font-light text-gray-800 mb-4 lg:mb-10">更多定制</h2>
+              {/* Removed redundant h2 title here */}
 
               <div className={`p-3 lg:p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row gap-3 lg:gap-6 items-center ${includeEbook ? 'border-accent bg-accent/5' : 'border-gray-100 bg-white hover:border-gray-200'}`} onClick={() => setIncludeEbook(!includeEbook)}>
                 <div className="flex items-center w-full sm:w-auto">

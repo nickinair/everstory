@@ -42,8 +42,6 @@ async function testInteractions() {
 
     // Perform Login to get Token
     let token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImR1bW15LTEyMyIsInBob25lIjoiMTk5OTk5OTk5OTkiLCJpYXQiOjE3NzI4NzEyMDYsImV4cCI6MTc3Mjg3NDgwNn0.x-udgKfSiZjzilbx4_jKBmRslruarnqtW4iNNRbAhcw';
-    try {
-        token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImR1bW15LTEyMyIsInBob25lIjoiMTk5OTk5OTk5OTkiLCJpYXQiOjE3NzI4NzEyMDYsImV4cCI6MTc3Mjg3NDgwNn0.x-udgKfSiZjzilbx4_jKBmRslruarnqtW4iNNRbAhcw';
 
     // 1. Add Like Interaction
     try {

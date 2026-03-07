@@ -895,34 +895,36 @@ export default function App() {
 
 
         {/* Mobile Bottom Navigation */}
-        <nav className="lg:hidden bg-white border-t border-gray-200 px-2 py-1 flex items-center justify-around z-30">
-          {navItems.filter(item => item.id !== 'settings').map((item) => (
+        {currentView !== 'upgrade-payment' && (
+          <nav className="lg:hidden bg-white border-t border-gray-200 px-2 py-1 flex items-center justify-around z-30">
+            {navItems.filter(item => item.id !== 'settings').map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setCurrentView(item.id as ViewType);
+                  if (item.id === 'order') {
+                    setIsOrdering(false);
+                    setOrderBackToHome(false);
+                  }
+                }}
+                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors cursor-pointer ${currentView === item.id
+                  ? 'text-primary'
+                  : 'text-gray-500'
+                  }`}
+              >
+                <item.icon className={`w-6 h-6 mb-1 ${currentView === item.id ? 'opacity-100' : 'opacity-70'}`} />
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </button>
+            ))}
             <button
-              key={item.id}
-              onClick={() => {
-                setCurrentView(item.id as ViewType);
-                if (item.id === 'order') {
-                  setIsOrdering(false);
-                  setOrderBackToHome(false);
-                }
-              }}
-              className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors cursor-pointer ${currentView === item.id
-                ? 'text-primary'
-                : 'text-gray-500'
-                }`}
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="flex flex-col items-center py-2 px-3 text-gray-500 cursor-pointer"
             >
-              <item.icon className={`w-6 h-6 mb-1 ${currentView === item.id ? 'opacity-100' : 'opacity-70'}`} />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <Menu className="w-6 h-6 mb-1 opacity-70" />
+              <span className="text-[10px] font-medium">更多</span>
             </button>
-          ))}
-          <button
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center py-2 px-3 text-gray-500 cursor-pointer"
-          >
-            <Menu className="w-6 h-6 mb-1 opacity-70" />
-            <span className="text-[10px] font-medium">更多</span>
-          </button>
-        </nav>
+          </nav>
+        )}
       </main>
 
       {/* Invitation Confirmation Modal */}

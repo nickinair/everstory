@@ -306,12 +306,13 @@ export const databaseService = {
             method: 'PATCH',
             body: JSON.stringify({
                 ...updates,
-                image_url: updates.imageUrl
+                image_url: updates.imageUrl,
+                cover_url: updates.imageUrl
             })
         });
         return {
             ...data,
-            imageUrl: data.image_url,
+            imageUrl: data.image_url || data.cover_url || data.imageUrl,
             date: new Date(data.created_at).toLocaleDateString('zh-CN')
         } as Story;
     },
@@ -590,6 +591,19 @@ export const databaseService = {
         }));
     },
 
+    async getProjectInvitations(projectId: string) {
+        if (projectId.startsWith('mock-')) return [];
+        return await apiRequest(`/api/projects/${projectId}/invitations`);
+    },
+
+    async sendInvitation(projectId: string, email?: string, phone?: string) {
+        if (projectId.startsWith('mock-')) return { success: true };
+        return await apiRequest(`/api/projects/${projectId}/invitations`, {
+            method: 'POST',
+            body: JSON.stringify({ email, phone })
+        });
+    },
+
     // --- Storage ---
     async getUploadUrl(fileName: string, fileType: string) {
         return await apiRequest('/api/storage/upload-url', {
@@ -605,7 +619,7 @@ export const databaseService = {
         });
     },
 
-    async uploadMedia(file: File | Blob, path: string, contentType?: string) {
+    async uploadMedia(file: File | Blob, path: string, contentType?: string): Promise<string> {
         // Compatibility wrapper: convert File/Blob to base64 and use uploadFile
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
