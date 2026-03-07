@@ -496,33 +496,45 @@ app.post('/api/auth/register-email', async (req, res) => {
 
 // Login via Phone and Password
 app.post('/api/auth/login', async (req, res) => {
-  const { phone, password } = req.body;
-
   try {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
+    const { phone, password, identifier, type, email } = req.body;
+    let user;
 
-    const [rows] = await pool.query('SELECT * FROM profiles WHERE phone = ?', [formattedPhone]); // Changed $1 to ?
-    if (rows.length === 0) {
-      return res.status(401).json({ error: '账号或密码错误' });
+    // Determine login identifier (phone or email)
+    const loginId = identifier || phone || email;
+    const loginType = type || (loginId && loginId.toString().includes('@') ? 'email' : 'phone');
+
+    if (loginType === 'email') {
+      if (!loginId) return res.status(400).json({ error: '请输入邮箱' });
+      const [rows] = await pool.query('SELECT * FROM profiles WHERE email = ?', [loginId]);
+      if (rows.length === 0) return res.status(401).json({ error: '账号或密码错误' });
+      user = rows[0];
+    } else {
+      if (!loginId) return res.status(400).json({ error: '请输入手机号' });
+
+      const cleanPhone = loginId.toString().replace(/\D/g, '');
+      const formattedPhone = cleanPhone.startsWith('86') ? `+${cleanPhone}` : `+86${cleanPhone}`;
+
+      const [rows] = await pool.query('SELECT * FROM profiles WHERE phone = ?', [formattedPhone]);
+      if (rows.length === 0) return res.status(401).json({ error: '账号或密码错误' });
+      user = rows[0];
     }
 
-    const user = rows[0];
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ error: '账号或密码错误' });
     }
 
-    const token = jwt.sign({ id: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: user.id, phone: user.phone, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({
       success: true,
       token,
-      user: { id: user.id, fullName: user.full_name, phone: user.phone, avatarUrl: user.avatar_url }
+      user: { id: user.id, fullName: user.full_name, phone: user.phone, email: user.email, avatarUrl: user.avatar_url }
     });
   } catch (error) {
     console.error('Login Error:', error);
-    res.status(500).json({ error: '登录失败' });
+    res.status(500).json({ error: '登录失败: ' + error.message });
   }
 });
 
@@ -724,18 +736,30 @@ app.get('/api/projects/:projectId/stories', authenticate, async (req, res) => {
 });
 
 app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
-  const { title, content, image_url, type, pages, metadata, prompt_id } = req.body;
+  const { title, content, image_url, audio_url, cover_url, type, pages, metadata, prompt_id } = req.body;
   try {
-    const [result] = await pool.query( // Changed to destructure for MySQL result format
-      `INSERT INTO stories (project_id, title, content, image_url, type, pages, metadata, prompt_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, // Changed $1-$8 to ?
-      [req.params.projectId, title, content, image_url, type || 'audio', pages || 1, metadata, prompt_id]
+    const [result] = await pool.query(
+      `INSERT INTO stories (project_id, title, content, cover_url, audio_url, type, pages, metadata, prompt_id, owner_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.params.projectId,
+        title,
+        content,
+        cover_url || image_url,
+        audio_url,
+        type || 'audio',
+        pages || 1,
+        JSON.stringify(metadata || {}),
+        prompt_id,
+        req.user.id
+      ]
     );
-    const storyId = result.insertId; // Get the ID of the newly inserted story
-    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [storyId]); // Fetch the newly created story
+    const storyId = result.insertId;
+    const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [storyId]);
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: '创建故事失败' });
+    console.error('Create Story Error:', error);
+    res.status(500).json({ error: '创建故事失败: ' + error.message });
   }
 });
 
@@ -750,24 +774,32 @@ app.get('/api/stories/:id', authenticate, async (req, res) => {
 });
 
 app.patch('/api/stories/:id', authenticate, async (req, res) => {
-  const { title, content, image_url, type, pages, metadata } = req.body;
+  const { title, content, image_url, audio_url, cover_url, type, pages, metadata, status } = req.body;
   try {
     const [result] = await pool.query(
       `UPDATE stories SET 
         title = COALESCE(?, title), 
         content = COALESCE(?, content), 
-        image_url = COALESCE(?, image_url),
+        cover_url = COALESCE(?, cover_url, image_url),
+        audio_url = COALESCE(?, audio_url),
         type = COALESCE(?, type),
         pages = COALESCE(?, pages),
-        metadata = COALESCE(?, metadata)
+        metadata = COALESCE(?, metadata),
+        status = COALESCE(?, status)
        WHERE id = ?`,
-      [title, content, image_url, type, pages, JSON.stringify(metadata), req.params.id]
+      [
+        title, content, cover_url || image_url, audio_url, type, pages,
+        metadata ? JSON.stringify(metadata) : null,
+        status,
+        req.params.id
+      ]
     );
     if (result.affectedRows === 0) return res.status(404).json({ error: '故事不存在' });
     const [rows] = await pool.query('SELECT * FROM stories WHERE id = ?', [req.params.id]);
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: '更新故事失败' });
+    console.error('Update Story Error:', error);
+    res.status(500).json({ error: '更新故事失败: ' + error.message });
   }
 });
 
