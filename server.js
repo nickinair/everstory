@@ -47,7 +47,16 @@ const transporter = nodemailer.createTransport({
 });
 
 // Initialize MySQL Pool
-const pool = mysql.createPool(process.env.DATABASE_URL);
+const pool = mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  waitForConnections: true,
+  connectionLimit: 10,
+  maxIdle: 10, // max idle connections, the default value is the same as `connectionLimit`
+  idleTimeout: 60000, // idle connections timeout, in milliseconds, the default value 60000
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
+});
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'everstory-secret-key-2026';
@@ -426,6 +435,60 @@ app.post('/api/auth/register-phone', async (req, res) => {
     console.error('Registration Error:', error);
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: '该手机号已注册，请直接登录' });
+    }
+    res.status(500).json({ error: '注册失败: ' + (error.message || '服务器错误') });
+  }
+});
+
+// Register user via Email
+app.post('/api/auth/register-email', async (req, res) => {
+  const { email, password, fullName, code } = req.body;
+  if (!email || !password || !code) {
+    return res.status(400).json({ error: '字段缺失' });
+  }
+
+  try {
+    // 1. Verify Email OTP
+    const [otpRows] = await pool.query(
+      `SELECT * FROM email_otps 
+       WHERE email = ? AND code = ? AND used = FALSE AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [email, code]
+    );
+
+    if (otpRows.length === 0) {
+      return res.status(400).json({ error: '验证码无效或已过期' });
+    }
+
+    const otpData = otpRows[0];
+
+    // 2. Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. Create user in profiles
+    const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`;
+
+    const [result] = await pool.query(
+      `INSERT INTO profiles (full_name, email, password_hash, avatar_url, phone)
+       VALUES (?, ?, ?, ?, ?)`,
+      [fullName, email, hashedPassword, avatarUrl, null]
+    );
+
+    const userId = result.insertId;
+    const [userRows] = await pool.query('SELECT * FROM profiles WHERE id = ?', [userId]);
+    const user = userRows[0];
+
+    // 4. Mark OTP as used
+    await pool.query('UPDATE email_otps SET used = TRUE WHERE id = ?', [otpData.id]);
+
+    // 5. Generate JWT
+    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({ success: true, token, user: { id: user.id, fullName: user.full_name, email: user.email } });
+  } catch (error) {
+    console.error('Email Registration Error:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: '该邮箱已注册，请直接登录' });
     }
     res.status(500).json({ error: '注册失败: ' + (error.message || '服务器错误') });
   }

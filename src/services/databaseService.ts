@@ -65,10 +65,11 @@ export const databaseService = {
         }
     },
 
-    async login(phone: string, password: string) {
+    async login(identifier: string, password: string, type: 'phone' | 'email' = 'phone') {
+        const body = type === 'phone' ? { phone: identifier, password } : { email: identifier, password };
         const data = await apiRequest('/api/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ phone, password })
+            body: JSON.stringify(body)
         });
         if (data.token) {
             setToken(data.token);
@@ -80,6 +81,17 @@ export const databaseService = {
         const data = await apiRequest('/api/auth/register-phone', {
             method: 'POST',
             body: JSON.stringify({ phone, password, fullName, code })
+        });
+        if (data.token) {
+            setToken(data.token);
+        }
+        return data;
+    },
+
+    async registerEmail(email: string, password: string, fullName: string, code: string) {
+        const data = await apiRequest('/api/auth/register-email', {
+            method: 'POST',
+            body: JSON.stringify({ email, password, fullName, code })
         });
         if (data.token) {
             setToken(data.token);

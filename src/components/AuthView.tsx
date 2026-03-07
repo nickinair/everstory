@@ -69,8 +69,7 @@ export default function AuthView() {
             if (method === 'phone') {
                 await databaseService.register(phone, password, fullName, otpCode);
             } else {
-                // Email registration if backend supports it, otherwise fallback
-                throw new Error('邮箱注册暂未开放，请使用手机号');
+                await databaseService.registerEmail(email, password, fullName, otpCode);
             }
 
             const session = await databaseService.getSession();
@@ -110,7 +109,8 @@ export default function AuthView() {
         setLoading(true);
         setError(null);
         try {
-            const result = await databaseService.login(phone, password);
+            const identifier = method === 'phone' ? phone : email;
+            const result = await databaseService.login(identifier, password, method);
             if (result.token) {
                 const session = await databaseService.getSession();
                 if (session && session.user) {

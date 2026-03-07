@@ -183,6 +183,7 @@ export default function App() {
       } else if (!resolvedProjectId || !userProjects.some((p: any) => p.id === resolvedProjectId)) {
         // Fallback if no ID or ID is no longer valid
         resolvedProjectId = userProjects[0]?.id || null;
+        console.log('App: Fallback to first project or null:', resolvedProjectId);
       }
 
       if (resolvedProjectId) {
@@ -595,6 +596,26 @@ export default function App() {
               const currentProject = projects.find(p => p.id === currentProjectId);
               const members = currentProject?.members || [];
               const membersCount = (currentProject?.members || []).length;
+
+              if (!currentProjectId && currentView !== 'settings' && currentView !== 'account' && currentView !== 'account-settings' && currentView !== 'redemption') {
+                return (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50">
+                    <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-3xl flex items-center justify-center mb-6 shadow-sm">
+                      <Plus className="w-10 h-10" />
+                    </div>
+                    <h2 className="text-2xl font-serif text-gray-800 mb-2">欢迎来到长生記</h2>
+                    <p className="text-gray-500 max-w-sm mb-8">
+                      您还没有任何项目。现在就创建一个项目，开始记录珍贵的回忆吧。
+                    </p>
+                    <button
+                      onClick={() => setCurrentView('settings')}
+                      className="px-8 py-3 bg-primary text-white rounded-full font-bold shadow-lg hover:shadow-xl transition-all"
+                    >
+                      立即创建项目
+                    </button>
+                  </div>
+                );
+              }
 
               return (
                 <>
