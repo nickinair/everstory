@@ -107,14 +107,17 @@ export default function AddStoryView({ projectId, onBack, onSave }: AddStoryView
       if (mediaType === 'audio' || mediaType === 'video') {
         const reader = new FileReader();
         const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+          reader.onloadend = () => {
+            const resultStr = reader.result as string;
+            resolve(resultStr.includes('base64,') ? resultStr.split('base64,')[1] : resultStr.split(',')[1]);
+          };
           reader.readAsDataURL(mediaFile);
         });
         const base64Data = await base64Promise;
         const text = await transcribeMedia(base64Data, mediaFile.type);
         if (text) setContent(text);
       } else if (mediaPreview) {
-        const base64Data = mediaPreview.split(',')[1];
+        const base64Data = mediaPreview.includes('base64,') ? mediaPreview.split('base64,')[1] : mediaPreview.split(',')[1];
         const result = await generateStoryFromMedia(base64Data, mediaFile.type);
         if (result) {
           if (result.title) setTitle(result.title);

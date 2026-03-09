@@ -63,6 +63,7 @@ export default function App() {
     return (localStorage.getItem('everstory-last-view') as ViewType) || 'home';
   });
   const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [projectDetailId, setProjectDetailId] = useState<string | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(() => {
@@ -849,19 +850,28 @@ export default function App() {
                 }}
               />
             )}
-            {currentView === 'story-detail' && selectedStoryId && stories.find(s => s.id === selectedStoryId) && (
-              <StoryDetailView
-                story={stories.find(s => s.id === selectedStoryId)!}
-                onClose={() => setCurrentView('stories')}
-                onUpdate={() => {
-                  if (currentProjectId) fetchProjectData(currentProjectId);
-                }}
-                onDelete={() => {
-                  if (currentProjectId) fetchProjectData(currentProjectId);
-                }}
-                currentUserRole={projects.find(p => p.id === currentProjectId)?.members.find(m => (m.userId || (m as any).user_id || m.id) === currentUser?.id)?.projectRole}
-              />
-            )}
+            {currentView === 'story-detail' && selectedStoryId && (() => {
+              const storyFromList = stories.find(s => s.id === selectedStoryId);
+              const storyToShow = storyFromList || selectedStory;
+              if (!storyToShow) return null;
+              return (
+                <StoryDetailView
+                  story={storyToShow}
+                  onClose={() => {
+                    setSelectedStory(null);
+                    setCurrentView('stories');
+                    if (currentProjectId) fetchProjectData(currentProjectId);
+                  }}
+                  onUpdate={() => {
+                    if (currentProjectId) fetchProjectData(currentProjectId);
+                  }}
+                  onDelete={() => {
+                    if (currentProjectId) fetchProjectData(currentProjectId);
+                  }}
+                  currentUserRole={projects.find(p => p.id === currentProjectId)?.members.find(m => (m.userId || (m as any).user_id || m.id) === currentUser?.id)?.projectRole}
+                />
+              );
+            })()}
             {currentView === 'recording' && selectedPrompt && currentProjectId && (
               <RecordingFlow
                 projectId={currentProjectId!}
@@ -874,11 +884,20 @@ export default function App() {
                   setIsQuickRecord(false);
                   setCurrentView('stories');
                 }}
-                onComplete={() => {
+                onComplete={async (data) => {
                   setSelectedPrompt(null);
                   setIsQuickRecord(false);
-                  setCurrentView('stories');
-                  fetchProjectData(currentProjectId!);
+                  if (data?.storyId) {
+                    // Set selectedStory immediately so we don't depend on stale stories array
+                    if (data.story) setSelectedStory(data.story);
+                    setSelectedStoryId(data.storyId);
+                    setCurrentView('story-detail');
+                    // Refresh in background to update the list
+                    fetchProjectData(currentProjectId!);
+                  } else {
+                    await fetchProjectData(currentProjectId!);
+                    setCurrentView('stories');
+                  }
                 }}
               />
             )}

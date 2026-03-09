@@ -19,6 +19,54 @@ async function callAIProxy(action: string, payload: any) {
   return data.result;
 }
 
+function parseLLMResponse(text: string): { title: string, content: string } {
+  const cleanText = text.trim();
+  const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+
+  if (jsonMatch) {
+    try {
+      // Standard JSON parse. Replacing unescaped control characters in case they break it.
+      return JSON.parse(jsonMatch[0].replace(/[\u0000-\u001F]+/g, (match) => {
+        if (match === '\n') return '\\n';
+        if (match === '\r') return '\\r';
+        if (match === '\t') return '\\t';
+        return '';
+      }));
+    } catch (e) {
+      console.warn('JSON parsing failed, attempting fallback regex extraction', e);
+
+      let title = "";
+      let content = "";
+
+      // Attempt to extract title safely (handling various quotes and spacing)
+      const titleMatch = jsonMatch[0].match(/"title"\s*:\s*"([^]*?)"(?:\s*,|\s*\})/i);
+      if (titleMatch) title = titleMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+
+      // Attempt to extract content safely
+      const contentMatch = jsonMatch[0].match(/"content"\s*:\s*"([^]*?)"(?:\s*,|\s*\})/i);
+      if (contentMatch) content = contentMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+
+      // If one is missing but the other exists, try to recover
+      if (title || content) {
+        return { title: title || "无标题故事", content: content || "（无法解析内容）" };
+      }
+
+      // If regex extraction fails, try a slightly looser approach for title
+      const looseTitleMatch = jsonMatch[0].match(/title["']?\s*[:=]\s*["']?([^"'\n,]+)/i);
+      if (looseTitleMatch) title = looseTitleMatch[1].trim();
+
+      if (title || content) {
+        return { title: title || "无标题故事", content: content || "（无法解析内容）" };
+      }
+
+      // Final fallback: just return the cleaned text as content
+      return { title: "", content: cleanText.replace(/[\{\}]/g, '').replace(/"title"\s*:\s*/g, '').replace(/"content"\s*:\s*/g, '').trim() };
+    }
+  }
+
+  return { title: "", content: cleanText };
+}
+
 export async function generateStoryFromMedia(base64Data: string, mimeType: string) {
   const prompt = `请根据上传的媒体内容（图片或视频），提取其中的关键内容，并生成：
 1. 一个简洁、吸引人的故事标题。
@@ -42,14 +90,7 @@ export async function generateStoryFromMedia(base64Data: string, mimeType: strin
       prompt
     });
 
-    const cleanText = resultText.trim();
-
-    // Extract JSON if wrapped in markdown code blocks
-    const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return { title: "", content: cleanText };
+    return parseLLMResponse(resultText);
   } catch (error) {
     console.error('Failed to parse AI response:', error);
     return { title: "", content: "" };
@@ -114,11 +155,8 @@ ${content}`;
     const resultText = await callAIProxy('optimize', {
       prompt
     });
-    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-    return { title: "", content: resultText.trim() || content };
+
+    return parseLLMResponse(resultText);
   } catch (error) {
     console.error("Optimize story error:", error);
     return { title: "", content: content };

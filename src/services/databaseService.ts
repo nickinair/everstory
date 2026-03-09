@@ -143,7 +143,7 @@ export const databaseService = {
             ownerId: p.owner_id,
             createdAt: new Date(p.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }),
             members: (p.members || []).map((m: any) => ({
-                id: m.id,
+                id: m.id || m.userId || m.user_id,
                 userId: m.user_id,
                 projectRole: m.role,
                 name: m.full_name || m.phone || '未知用户',
@@ -279,6 +279,8 @@ export const databaseService = {
                 ...story,
                 image_url: story.imageUrl,
                 cover_url: story.imageUrl,
+                audio_url: story.videoUrl,
+                videoUrl: story.videoUrl,
                 metadata: {
                     ...story.metadata,
                     additionalImages: story.additionalImages || []
@@ -287,6 +289,8 @@ export const databaseService = {
         });
         return {
             ...data,
+            id: data.id,
+            videoUrl: data.videoUrl || data.audio_url || data.metadata?.videoUrl,
             imageUrl: data.imageUrl || data.cover_url || data.image_url,
             date: new Date(data.created_at).toLocaleDateString('zh-CN')
         } as Story;
@@ -302,12 +306,22 @@ export const databaseService = {
                 return stories[index] as Story;
             }
         }
+        const currentStory = await this.getStory(storyId);
+        const metadata = {
+            ...(currentStory.metadata || {}),
+            ...(updates.metadata || {}),
+            additionalImages: updates.additionalImages || updates.metadata?.additionalImages || currentStory.additionalImages || []
+        };
+
         const data = await apiRequest(`/api/stories/${storyId}`, {
             method: 'PATCH',
             body: JSON.stringify({
                 ...updates,
                 image_url: updates.imageUrl,
-                cover_url: updates.imageUrl
+                cover_url: updates.imageUrl,
+                audio_url: updates.videoUrl,
+                videoUrl: updates.videoUrl,
+                metadata: metadata
             })
         });
         return {
@@ -626,7 +640,8 @@ export const databaseService = {
             const reader = new FileReader();
             reader.onloadend = async () => {
                 try {
-                    const base64Data = (reader.result as string).split(',')[1];
+                    const resultStr = reader.result as string;
+                    const base64Data = resultStr.includes('base64,') ? resultStr.split('base64,')[1] : resultStr.split(',')[1];
                     const fileName = path.split('/').pop() || 'file';
                     const fileType = contentType || (file instanceof File ? file.type : 'application/octet-stream');
                     const result = await this.uploadFile(base64Data, fileName, fileType);
@@ -648,9 +663,21 @@ export const databaseService = {
     },
 
     async downloadMedia(url: string) {
-        const response = await fetch(url);
+        const proxiedUrl = this.getMediaProxyUrl(url);
+        const response = await fetch(proxiedUrl);
         if (!response.ok) throw new Error(`Failed to fetch media: ${response.statusText}`);
         return await response.blob();
+    },
+
+    getMediaProxyUrl(url: string): string {
+        if (!url || !url.includes('myqcloud.com')) return url;
+        try {
+            const urlObj = new URL(url);
+            const key = urlObj.pathname.startsWith('/') ? urlObj.pathname.slice(1) : urlObj.pathname;
+            return `/api/storage/file?key=${encodeURIComponent(key)}`;
+        } catch (e) {
+            return url;
+        }
     },
 
     getCurrentUserId() {

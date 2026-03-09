@@ -93,7 +93,11 @@ const authenticate = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    // 强制转换为小写，确保后续路径（如 media/userid/..）的一致性，避免 COS 大小写敏感导致的 404
+    req.user = {
+      ...decoded,
+      id: decoded.id ? decoded.id.toLowerCase() : decoded.id
+    };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
@@ -468,13 +472,13 @@ app.post('/api/auth/register-email', async (req, res) => {
     // 3. Create user in profiles
     const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`;
 
+    const userId = crypto.randomUUID();
     const [result] = await pool.query(
-      `INSERT INTO profiles (full_name, email, password_hash, avatar_url, phone)
-       VALUES (?, ?, ?, ?, ?)`,
-      [fullName, email, hashedPassword, avatarUrl, null]
+      `INSERT INTO profiles (id, full_name, email, password_hash, avatar_url, phone)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [userId, fullName, email, hashedPassword, avatarUrl, null]
     );
 
-    const userId = result.insertId;
     const [userRows] = await pool.query('SELECT * FROM profiles WHERE id = ?', [userId]);
     const user = userRows[0];
 
@@ -662,6 +666,7 @@ app.post('/api/storage/upload', authenticate, async (req, res) => {
     Key: key,
     Body: buffer,
     ContentType: fileType,
+    ACL: 'public-read',
   }, (err, data) => {
     if (err) {
       console.error('COS Upload Error:', err);
@@ -672,21 +677,134 @@ app.post('/api/storage/upload', authenticate, async (req, res) => {
   });
 });
 
+// Proxy media from COS to avoid CORS issues on Lightweight buckets
+app.get('/api/storage/file', async (req, res) => {
+  const { key } = req.query;
+  if (!key) return res.status(400).json({ error: 'Missing key' });
+
+  const range = req.headers.range;
+
+  const tryGetFile = (currentKey) => {
+    return new Promise((resolve, reject) => {
+      const params = {
+        Bucket: COS_BUCKET,
+        Region: COS_REGION,
+        Key: currentKey,
+      };
+      if (range) params.Range = range;
+
+      cos.getObject(params, (err, data) => {
+        if (err) {
+          // 如果是 404 且还没试过大小写修正，则返回特定标记
+          if (err.statusCode === 404) return resolve({ notFound: true });
+          return reject(err);
+        }
+        resolve({ data });
+      });
+    });
+  };
+
+  try {
+    // 1. 尝试原始 Key
+    let result = await tryGetFile(key);
+
+    // 2. 如果 404，尝试对用户 ID 部分进行大小写容错 (media/USERID/...)
+    // 我们发现有些路径是 media/F942... (大写)，而数据库存的是小写
+    if (result.notFound && key.startsWith('media/')) {
+      const parts = key.split('/');
+      if (parts.length >= 2) {
+        const userId = parts[1];
+        // 尝试切换大小写 (如果现在是小写则变大写，反之亦然，这里主要处理我们发现的 F... vs f... 问题)
+        // 简单起见，如果包含小写字母则试一下首字母大写，或者整体大写
+        const fallbackUserId = userId.charAt(0).toUpperCase() + userId.slice(1);
+        const fallbackKey = `media/${fallbackUserId}/${parts.slice(2).join('/')}`;
+
+        console.log(`[Media Proxy] 404 for ${key}, trying fallback: ${fallbackKey}`);
+        result = await tryGetFile(fallbackKey);
+
+        // 如果还不行，再试一个完全大写的 ID (有些系统 UUID 生成后带大写)
+        if (result.notFound) {
+          const upperKey = `media/${userId.toUpperCase()}/${parts.slice(2).join('/')}`;
+          console.log(`[Media Proxy] Still 404, trying fallback: ${upperKey}`);
+          result = await tryGetFile(upperKey);
+        }
+      }
+    }
+
+    if (result.notFound) {
+      return res.status(404).json({ error: 'File not found even after fallback' });
+    }
+
+    const { data } = result;
+
+    // Determine Content-Type
+    let contentType = data.headers['content-type'] || 'application/octet-stream';
+    if (contentType === 'application/octet-stream' || !contentType) {
+      const ext = key.split('.').pop().toLowerCase();
+      const mimeMap = {
+        'mp4': 'video/mp4',
+        'webm': 'video/webm',
+        'ogg': 'video/ogg',
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif'
+      };
+      contentType = mimeMap[ext] || contentType;
+    }
+
+    res.setHeader('Content-Type', contentType);
+    if (data.headers['content-length']) res.setHeader('Content-Length', data.headers['content-length']);
+    if (data.headers['content-range']) res.setHeader('Content-Range', data.headers['content-range']);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    const status = range ? 206 : 200;
+    res.status(status);
+
+    if (data.Body && typeof data.Body.pipe === 'function') {
+      data.Body.pipe(res);
+    } else {
+      res.send(data.Body);
+    }
+  } catch (err) {
+    console.error('COS Proxy Error:', err);
+    return res.status(err.statusCode || 500).json({ error: 'Failed to fetch file' });
+  }
+});
+
 // --- Project Endpoints ---
 
 app.get('/api/projects', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query( // Changed to destructure for MySQL result format
+    const [rows] = await pool.query(
       `SELECT p.*,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('project_id', pm.project_id, 'user_id', pm.user_id, 'role', pm.role)) FROM project_members pm WHERE pm.project_id = p.id) as members
+        COALESCE(
+          (SELECT JSON_ARRAYAGG(
+            JSON_OBJECT(
+              'project_id', pm_sub.project_id, 
+              'user_id', pm_sub.user_id, 
+              'role', pm_sub.role,
+              'full_name', u.full_name,
+              'phone', u.phone,
+              'avatar_url', u.avatar_url
+            )
+          ) 
+          FROM project_members pm_sub 
+          JOIN profiles u ON pm_sub.user_id = u.id
+          WHERE pm_sub.project_id = p.id),
+          JSON_ARRAY()
+        ) as members
        FROM projects p
-       JOIN project_members pm ON p.id = pm.project_id
-       WHERE pm.user_id = ?`, // Changed $1 to ?, json_agg to JSON_ARRAYAGG, json_build_object to JSON_OBJECT
+       JOIN project_members pm_outer ON p.id = pm_outer.project_id
+       WHERE pm_outer.user_id = ?`,
       [req.user.id]
     );
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: '获取项目失败' });
+    console.error('Fetch Projects Error:', error);
+    res.status(500).json({ error: '获取项目失败: ' + error.message });
   }
 });
 
@@ -695,13 +813,11 @@ app.post('/api/projects', authenticate, async (req, res) => {
   const client = await pool.getConnection(); // Changed pool.connect() to pool.getConnection() for MySQL
   try {
     await client.beginTransaction(); // Changed client.query('BEGIN') to client.beginTransaction()
-    const [result] = await client.query( // Changed to destructure for MySQL result format
-      'INSERT INTO projects (name, description, owner_id) VALUES (?, ?, ?)', // Changed $1/$2/$3 to ?
-      [name, description, req.user.id]
+    const projectId = crypto.randomUUID();
+    const [result] = await client.query(
+      'INSERT INTO projects (id, name, description, owner_id) VALUES (?, ?, ?, ?)',
+      [projectId, name, description, req.user.id]
     );
-    const projectId = result.insertId; // Get the ID of the newly inserted project for auto-increment IDs
-    // If using UUIDs, you'd need to fetch the project by another unique field or generate UUID client-side.
-    // Assuming `id` is auto-increment for simplicity here, or that `RETURNING *` is not supported.
     const [projectRows] = await client.query('SELECT * FROM projects WHERE id = ?', [projectId]);
     const project = projectRows[0];
 
@@ -775,17 +891,19 @@ app.get('/api/projects/:projectId/stories', authenticate, async (req, res) => {
 });
 
 app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
-  const { title, content, image_url, audio_url, cover_url, type, pages, metadata, prompt_id } = req.body;
+  const { title, content, image_url, audio_url, videoUrl, cover_url, type, pages, metadata, prompt_id } = req.body;
   try {
+    const storyId = crypto.randomUUID();
     const [result] = await pool.query(
-      `INSERT INTO stories (project_id, title, content, cover_url, audio_url, type, pages, metadata, prompt_id, owner_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stories (id, project_id, title, content, cover_url, audio_url, type, pages, metadata, prompt_id, owner_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        storyId,
         req.params.projectId,
         title,
         content,
         cover_url || image_url,
-        audio_url,
+        videoUrl || audio_url,
         type || 'audio',
         pages || 1,
         JSON.stringify(metadata || {}),
@@ -793,7 +911,6 @@ app.post('/api/projects/:projectId/stories', authenticate, async (req, res) => {
         req.user.id
       ]
     );
-    const storyId = result.insertId;
     const [rows] = await pool.query('SELECT *, cover_url as imageUrl FROM stories WHERE id = ?', [storyId]);
     res.json(rows[0]);
   } catch (error) {
@@ -813,7 +930,7 @@ app.get('/api/stories/:id', authenticate, async (req, res) => {
 });
 
 app.patch('/api/stories/:id', authenticate, async (req, res) => {
-  const { title, content, image_url, audio_url, cover_url, type, pages, metadata, status } = req.body;
+  const { title, content, image_url, audio_url, videoUrl, cover_url, type, pages, metadata, status } = req.body;
   try {
     const [result] = await pool.query(
       `UPDATE stories SET 
@@ -827,7 +944,7 @@ app.patch('/api/stories/:id', authenticate, async (req, res) => {
         status = COALESCE(?, status)
        WHERE id = ?`,
       [
-        title, content, cover_url || image_url, audio_url, type, pages,
+        title, content, cover_url || image_url, videoUrl || audio_url, type, pages,
         metadata ? JSON.stringify(metadata) : null,
         status,
         req.params.id
@@ -993,7 +1110,7 @@ app.post('/api/projects/:projectId/join', authenticate, async (req, res) => {
   try {
     // Check if already a member
     const [existing] = await pool.query(
-      'SELECT id FROM project_members WHERE project_id = ? AND user_id = ?',
+      'SELECT user_id FROM project_members WHERE project_id = ? AND user_id = ?',
       [projectId, userId]
     );
     if (existing.length > 0) {
@@ -1040,11 +1157,12 @@ app.get('/api/projects/:projectId/invitations', authenticate, async (req, res) =
 app.post('/api/projects/:projectId/invitations', authenticate, async (req, res) => {
   const { email, phone } = req.body;
   try {
+    const inviteId = crypto.randomUUID();
     const [result] = await pool.query(
-      'INSERT INTO project_invitations (project_id, email, phone) VALUES (?, ?, ?)',
-      [req.params.projectId, email, phone]
+      'INSERT INTO project_invitations (id, project_id, email, phone) VALUES (?, ?, ?, ?)',
+      [inviteId, req.params.projectId, email, phone]
     );
-    const [rows] = await pool.query('SELECT * FROM project_invitations WHERE id = ?', [result.insertId]);
+    const [rows] = await pool.query('SELECT * FROM project_invitations WHERE id = ?', [inviteId]);
     res.json(rows[0]);
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') return res.json({ success: true, message: '已存在邀请' });
@@ -1129,7 +1247,8 @@ async function callDoubaoLLM(prompt, options = {}) {
         headers: {
           'Authorization': `Bearer ${VOLC_ARK_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000 // 30 second timeout
       }
     );
 

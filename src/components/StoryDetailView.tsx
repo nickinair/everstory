@@ -32,11 +32,12 @@ import {
   Copy,
   CheckCheck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { Story, Prompt, ProjectMember, StoryInteraction } from '../types';
 import { databaseService } from '../services/databaseService';
 import { transcribeMedia, optimizeStoryContent } from '../services/aiService';
 import BookLoader from './BookLoader';
+import AILoader from './AILoader';
 
 interface StoryDetailViewProps {
   story: Story;
@@ -56,14 +57,15 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState<'none' | 'settings'>('none');
   const [assistantMode, setAssistantMode] = useState<'first' | 'third' | 'cleaned'>('cleaned');
-  const isTranscribingPlaceholder = (content?: string, title?: string) =>
+  const isContentPlaceholder = (content?: string) =>
     (content || '').includes('AI 正在记录你的心声') ||
-    (content || '').includes('AI 正在为您转换语音') ||
+    (content || '').includes('AI 正在为您转换语音');
+  const isTitlePlaceholder = (title?: string) =>
     (title || '').includes('正在生成标题');
   const [editedTitle, setEditedTitle] = useState(story.title);
   const [editedContent, setEditedContent] = useState(story.content || '');
   const [localVideoUrl, setLocalVideoUrl] = useState<string | undefined>(story.videoUrl);
-  const [isTranscribing, setIsTranscribing] = useState(isTranscribingPlaceholder(story.content, story.title));
+  const [isPolling, setIsPolling] = useState(isContentPlaceholder(story.content) || isTitlePlaceholder(story.title));
   const [additionalImages, setAdditionalImages] = useState<string[]>(story.additionalImages || []);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isReTranscribing, setIsReTranscribing] = useState(false);
@@ -92,10 +94,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
 
   useEffect(() => {
-    const isTranscribingNow = editedContent.includes('AI 正在记录你的心声');
-    setIsTranscribing(isTranscribingNow);
+    const isEditingPlaceholder = isContentPlaceholder(editedContent);
 
-    const isChanged = editedTitle !== story.title || (editedContent.trim() !== (story.content || '').trim() && !isTranscribingNow);
+    const isChanged = editedTitle !== story.title || (editedContent.trim() !== (story.content || '').trim() && !isEditingPlaceholder);
     setHasChanges(isChanged);
   }, [editedTitle, editedContent, story.title, story.content]);
 
@@ -105,14 +106,19 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     setVideoBlobUrl(null);
     setEditedTitle(story.title);
     setEditedContent(story.content || '');
-    setIsTranscribing((story.content || '').includes('AI 正在记录你的心声'));
     setAdditionalImages(story.additionalImages || []);
     setActiveImageUrl(story.imageUrl || (story.additionalImages && story.additionalImages.length > 0 ? story.additionalImages[0] : null));
+    // Always sync video URL when story identity changes
+    setLocalVideoUrl(story.videoUrl);
+
+    // Explicitly reset polling state based on the NEW story identity
+    const shouldPoll = isContentPlaceholder(story.content) || isTitlePlaceholder(story.title);
+    setIsPolling(shouldPoll);
   }, [story.id]);
 
   useEffect(() => {
     if (!isEditing && !isGenerating && !isSaving && !hasManuallySaved) {
-      if (!isTranscribingPlaceholder(story.content, story.title)) {
+      if (!isContentPlaceholder(story.content) && !isTitlePlaceholder(story.title)) {
         setEditedTitle(story.title);
         setEditedContent(story.content || '');
       }
@@ -122,19 +128,33 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
 
-    if (isTranscribing) {
+    if (isPolling) {
       pollInterval = setInterval(async () => {
         if (isEditing || isSaving || hasManuallySaved) return;
 
         try {
           const updatedStory = await databaseService.getStory(story.id);
-          if (updatedStory && !isTranscribingPlaceholder(updatedStory.content, updatedStory.title)) {
-            setEditedContent(updatedStory.content || '');
-            setEditedTitle(updatedStory.title || story.title);
-            if (updatedStory.videoUrl) setLocalVideoUrl(updatedStory.videoUrl);
-            if (updatedStory.imageUrl) setActiveImageUrl(updatedStory.imageUrl);
-            setIsTranscribing(false);
-            clearInterval(pollInterval);
+          if (updatedStory) {
+            // Update content as soon as it's not a placeholder
+            if (!isContentPlaceholder(updatedStory.content)) {
+              setEditedContent(updatedStory.content || '');
+            }
+            // Update title as soon as it's not a placeholder
+            if (!isTitlePlaceholder(updatedStory.title)) {
+              setEditedTitle(updatedStory.title || story.title);
+            }
+            // Always update additional images if they changed
+            if (updatedStory.additionalImages && JSON.stringify(updatedStory.additionalImages) !== JSON.stringify(additionalImages)) {
+              setAdditionalImages(updatedStory.additionalImages);
+            }
+            // Check if both are ready to stop polling
+            if (!isContentPlaceholder(updatedStory.content) && !isTitlePlaceholder(updatedStory.title)) {
+              if (updatedStory.videoUrl) setLocalVideoUrl(updatedStory.videoUrl);
+              if (updatedStory.imageUrl) setActiveImageUrl(updatedStory.imageUrl);
+              setIsPolling(false);
+              clearInterval(pollInterval);
+              if (onUpdate) onUpdate();
+            }
           }
         } catch (err) {
           console.error('Polling error:', err);
@@ -145,7 +165,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [isTranscribing, story.id, isEditing]);
+  }, [isPolling, story.id, isEditing]);
 
   useEffect(() => {
     if (mediaRef.current && localVideoUrl) {
@@ -153,30 +173,31 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     }
   }, [localVideoUrl]);
 
-  // Proactively download video as blob to fix playback issues with COS URLs missing Content-Type
+  // Proactively download media as blob to fix playback issues with COS URLs missing Content-Type
   useEffect(() => {
-    if (story.type !== 'video' || !localVideoUrl || videoBlobUrl) return;
+    if (!localVideoUrl) return;
 
     let cancelled = false;
     const loadBlob = async () => {
       try {
-        const response = await fetch(localVideoUrl);
+        const proxiedUrl = databaseService.getMediaProxyUrl(localVideoUrl);
+        const response = await fetch(proxiedUrl);
         if (!response.ok || cancelled) return;
         const blob = await response.blob();
         if (!cancelled) {
-          // Force webm content type since browser MediaRecorder always produces WebM
-          const typedBlob = new Blob([blob], { type: 'video/webm' });
+          const mimeType = story.type === 'video' ? 'video/webm' : 'audio/mpeg';
+          const typedBlob = new Blob([blob], { type: mimeType });
           const url = URL.createObjectURL(typedBlob);
           setVideoBlobUrl(url);
         }
       } catch (err) {
-        console.warn('Proactive video blob load failed, will rely on direct URL:', err);
+        console.warn('Proactive media blob load failed, will rely on direct URL:', err);
       }
     };
 
     loadBlob();
     return () => { cancelled = true; };
-  }, [localVideoUrl, story.type]);
+  }, [localVideoUrl, story.id]);
 
   // Fetch interactions
   useEffect(() => {
@@ -346,16 +367,14 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (additionalImages.length >= 5) {
-      alert('最多只能上传5张图片');
-      return;
-    }
+    const remainingSlots = 10 - (additionalImages.length + 1); // +1 for the cover image
+    const filesToUpload = Array.from(files).slice(0, Math.max(0, remainingSlots));
 
-    const remainingSlots = 5 - additionalImages.length;
-    const filesToUpload = Array.from(files).slice(0, remainingSlots);
-
-    if (filesToUpload.length < files.length) {
+    if (files.length > remainingSlots && remainingSlots > 0) {
       alert(`由于限制，仅前 ${remainingSlots} 张图片将被上传`);
+    } else if (remainingSlots <= 0) {
+      alert('相册已满（最多10张）');
+      return;
     }
 
     setIsUploadingPhoto(true);
@@ -373,18 +392,9 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
         additionalImages: newImages
       };
 
-      // For audio stories, set the first image as the cover if no custom cover is set
-      // or if we want to ensure the first of the 5 is the main visual
-      if (story.type === 'audio' && newImages.length > 0) {
-        updates.imageUrl = newImages[0];
-      }
-
       await databaseService.updateStory(story.id, updates);
 
       setAdditionalImages(newImages);
-      if (newImages.length === urls.length) { // First upload
-        setActiveImageUrl(newImages[0]);
-      }
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Photo upload failed:', error);
@@ -440,7 +450,8 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
         reader.onloadend = () => {
-          const base64 = (reader.result as string).split(',')[1];
+          const resultStr = reader.result as string;
+          const base64 = resultStr.includes('base64,') ? resultStr.split('base64,')[1] : resultStr.split(',')[1];
           resolve(base64);
         };
       });
@@ -473,6 +484,71 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
     handleReTranscribe();
   };
 
+  const togglePlayback = async () => {
+    const video = mediaRef.current;
+    if (!video) return;
+
+    const currentUrl = videoBlobUrl || (localVideoUrl ? databaseService.getMediaProxyUrl(localVideoUrl) : undefined);
+
+    if (!currentUrl) {
+      console.warn("播放失败: 地址尚未就绪");
+      return;
+    }
+
+    try {
+      // 关键修正：同步 DOM 状态。处理绝对路径与相对路径的差异
+      const isUrlMatched = video.src === currentUrl || video.currentSrc.includes(currentUrl);
+      if (!isUrlMatched) {
+        console.log("切换视频源:", currentUrl);
+        video.src = currentUrl;
+        video.load(); // 强制浏览器重新解析资源
+      }
+
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      } else {
+        // 如果资源未就绪，先强制 load 一次
+        if (video.readyState === 0) {
+          console.warn("资源未就绪，强制执行 load()...");
+          video.load();
+        }
+
+        await video.play();
+        setIsPlaying(true);
+      }
+    } catch (err: any) {
+      console.error("播放失败详细信息:", err);
+      if (err.name === 'NotSupportedError') {
+        console.warn("二次强力重试: 强制 load()...");
+        video.load();
+        try {
+          await video.play();
+          setIsPlaying(true);
+        } catch (retryErr) {
+          console.error("二次重试播放依然失败:", retryErr);
+        }
+      }
+    }
+  };
+
+  const handleVideoError = async (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const error = (e.target as any).error;
+    if (error?.code === 4 && !videoBlobUrl && localVideoUrl) {
+      try {
+        const blob = await databaseService.downloadMedia(localVideoUrl);
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          setVideoBlobUrl(url);
+          return;
+        }
+      } catch (err) {
+        console.error('Blob fallback failed:', err);
+      }
+    }
+    if (isPlaying) setIsPlaying(false);
+  };
+
   const isASRFailure = (editedContent || '').includes('语音识别未成功');
 
   return (
@@ -493,30 +569,15 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
             <div className="relative w-full max-w-5xl aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-2xl group">
               {story.type === 'video' ? (
                 <video
-                  key={videoBlobUrl || localVideoUrl}
                   ref={mediaRef as React.RefObject<HTMLVideoElement>}
-                  src={videoBlobUrl || localVideoUrl || undefined}
-                  poster={story.imageUrl}
-                  className="w-full h-full object-contain bg-black"
+                  src={videoBlobUrl || (localVideoUrl ? databaseService.getMediaProxyUrl(localVideoUrl) : undefined)}
+                  poster={story.imageUrl ? databaseService.getMediaProxyUrl(story.imageUrl) : undefined}
+                  className="w-full h-full object-contain bg-black cursor-pointer"
+                  onClick={togglePlayback}
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={handleLoadedMetadata}
                   onEnded={() => setIsPlaying(false)}
-                  onError={async (e) => {
-                    const error = (e.target as any).error;
-                    if (error?.code === 4 && !videoBlobUrl && localVideoUrl) {
-                      try {
-                        const blob = await databaseService.downloadMedia(localVideoUrl);
-                        if (blob) {
-                          const url = URL.createObjectURL(blob);
-                          setVideoBlobUrl(url);
-                          return;
-                        }
-                      } catch (err) {
-                        console.error('Blob fallback failed:', err);
-                      }
-                    }
-                    if (isPlaying) setIsPlaying(false);
-                  }}
+                  onError={handleVideoError}
                   controls
                   playsInline
                   preload="auto"
@@ -524,7 +585,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               ) : (
                 <div className="w-full h-full relative bg-stone-900 flex items-center justify-center overflow-hidden">
                   <img
-                    src={activeImageUrl || story.imageUrl || (story.type === 'audio' ? '/audio_cover.png' : '')}
+                    src={databaseService.getMediaProxyUrl(activeImageUrl || story.imageUrl || (story.type === 'audio' ? '/audio_cover.png' : ''))}
                     alt={story.title}
                     className="w-full h-full object-cover opacity-80"
                     referrerPolicy="no-referrer"
@@ -535,16 +596,16 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                     }}
                   />
                   {story.type === 'audio' && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md z-20">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-md z-30 bg-white/15 backdrop-blur-xl rounded-full px-2 py-1 shadow-2xl border border-white/10 group-hover:opacity-100 transition-opacity flex items-center">
                       <audio
-                        key={localVideoUrl}
                         ref={mediaRef as React.RefObject<HTMLAudioElement>}
-                        src={localVideoUrl}
+                        src={videoBlobUrl || (localVideoUrl ? databaseService.getMediaProxyUrl(localVideoUrl) : undefined)}
                         onTimeUpdate={handleTimeUpdate}
                         onLoadedMetadata={handleLoadedMetadata}
                         onEnded={() => setIsPlaying(false)}
                         controls
-                        className="w-full opacity-60 hover:opacity-100 transition-opacity rounded-full bg-white/20 backdrop-blur-md"
+                        className="w-full h-10 accent-accent"
+                        preload="auto"
                       />
                     </div>
                   )}
@@ -567,60 +628,78 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
         <div className="w-full lg:basis-[40%] bg-white flex flex-col flex-1 lg:h-full lg:min-h-0 shadow-2xl relative min-h-0">
           <div className="px-4 py-2 lg:px-6 lg:py-4 flex justify-between items-center border-b border-gray-100 shrink-0">
             <div className="flex-1 flex items-center overflow-x-auto scrollbar-hide space-x-2 mr-3 py-1">
-              {/* Cover Image / Default Icon */}
+              {/* Fixed Cover Image (Cannot be deleted or moved) */}
               <div
-                onClick={() => setActiveImageUrl(additionalImages[0] || story.imageUrl)}
-                className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === (additionalImages[0] || story.imageUrl) || (!activeImageUrl && !additionalImages.length) ? 'border-accent' : 'border-white/20'} overflow-hidden shrink-0 shadow-sm cursor-pointer hover:border-accent transition-all`}
+                onClick={() => setActiveImageUrl(story.imageUrl)}
+                className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === story.imageUrl || (!activeImageUrl && !additionalImages.length) ? 'border-accent' : 'border-white/20'} overflow-hidden shrink-0 shadow-sm cursor-pointer hover:border-accent transition-all`}
               >
-                {story.type === 'audio' && additionalImages.length === 0 && (!story.imageUrl || story.imageUrl === '/audio_cover.png') ? (
+                {story.type === 'audio' && (!story.imageUrl || story.imageUrl === '/audio_cover.png') ? (
                   <div className="w-full h-full bg-stone-900 flex items-center justify-center">
                     <Mic className="w-4 h-4 text-[#4a7c7c]" />
                   </div>
                 ) : (
-                  <>
-                    <img
-                      src={additionalImages[0] || story.imageUrl || '/audio_cover.png'}
-                      alt="封面"
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                    {additionalImages.length > 0 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setImageToDelete(additionalImages[0]);
-                        }}
-                        className="absolute top-0 right-0 p-0.5 bg-black/40 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/60 rounded-bl-md"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    )}
-                  </>
+                  <img
+                    src={story.imageUrl || '/audio_cover.png'}
+                    alt="封面"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      if (story.type === 'audio') {
+                        (e.target as HTMLImageElement).src = '/audio_cover.png';
+                      }
+                    }}
+                  />
                 )}
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none">
+                  <Star className="w-3 h-3 text-white fill-white" />
+                </div>
               </div>
 
-              {/* Additional Images */}
-              {additionalImages.slice(1).map((url, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => setActiveImageUrl(url)}
-                  className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === url ? 'border-accent' : 'border-white/20'} transition-all overflow-hidden shrink-0 cursor-pointer hover:border-accent`}
-                >
-                  <img src={url} alt={`图片 ${idx + 2}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageToDelete(url);
+              {/* Additional Images (Reorderable) */}
+              <Reorder.Group
+                axis="x"
+                values={additionalImages}
+                onReorder={async (newOrder) => {
+                  setAdditionalImages(newOrder);
+                  try {
+                    await databaseService.updateStory(story.id, {
+                      additionalImages: newOrder
+                    });
+                    if (onUpdate) onUpdate();
+                  } catch (err) {
+                    console.error('Failed to update image order:', err);
+                  }
+                }}
+                className="flex items-center space-x-2"
+              >
+                {additionalImages.map((url) => (
+                  <Reorder.Item
+                    key={url}
+                    value={url}
+                    onClick={() => setActiveImageUrl(url)}
+                    whileDrag={{
+                      scale: 1.1,
+                      zIndex: 50,
+                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2)"
                     }}
-                    className="absolute top-0 right-0 p-0.5 bg-black/40 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/60 rounded-bl-md"
+                    className={`group/thumb relative w-8 h-8 lg:w-10 lg:h-10 rounded-md border-2 ${activeImageUrl === url ? 'border-accent' : 'border-white/20'} overflow-hidden shrink-0 cursor-grab active:cursor-grabbing hover:border-accent`}
                   >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              ))}
+                    <img src={url} alt="故事图片" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageToDelete(url);
+                      }}
+                      className="absolute top-0 right-0 p-0.5 bg-black/40 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity hover:bg-black/60 rounded-bl-md"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </Reorder.Item>
+                ))}
+              </Reorder.Group>
 
               {/* Upload Button */}
-              {additionalImages.length < 5 && (
+              {additionalImages.length < 9 && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploadingPhoto}
@@ -746,8 +825,18 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                     className="w-full text-xl lg:text-3xl font-serif text-gray-900 leading-tight border-b border-accent outline-none bg-transparent"
                   />
                 ) : (
-                  <h1 className="text-xl lg:text-3xl font-serif text-gray-900 leading-tight">
+                  <h1 className="text-xl lg:text-3xl font-serif text-gray-900 leading-tight flex items-center">
                     {editedTitle}
+                    {isPolling && isTitlePlaceholder(editedTitle) && (
+                      <motion.div
+                        animate={{ opacity: [0.4, 1, 0.4] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                        className="ml-3 px-2 py-0.5 bg-accent/10 rounded text-[10px] text-accent font-sans font-bold flex items-center"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5 animate-spin mr-1" />
+                        AI 正在生成标题...
+                      </motion.div>
+                    )}
                   </h1>
                 )}
 
@@ -760,12 +849,12 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                     />
                   ) : (
                     <>
-                      {isTranscribing ? (
+                      {isContentPlaceholder(editedContent) ? (
                         <div className="py-12 flex flex-col items-center justify-center bg-accent/5 rounded-3xl border border-dashed border-accent/20">
-                          <BookLoader />
-                          <div className="text-center space-y-2 mt-8">
-                            <h3 className="text-lg font-bold text-gray-800">AI 正在为您转换语音...</h3>
-                            <p className="text-sm text-gray-400 px-8">完成后文字将自动显示在这里</p>
+                          <AILoader />
+                          <div className="text-center space-y-2 mt-4">
+                            <h3 className="text-lg font-bold text-gray-800">AI 正在处理您的故事...</h3>
+                            <p className="text-sm text-gray-400 px-8">识别与润色完成后，文字将自动显示在这里</p>
                           </div>
                         </div>
                       ) : (
@@ -826,7 +915,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
                   >
                     <Heart className={`w-5 h-5 lg:w-6 lg:h-6 ${hasUserLiked ? 'text-red-400 fill-red-400' : 'text-gray-400 group-hover:text-red-500'} mb-1 lg:mb-1.5`} />
                     <span className="text-[11px] lg:text-[12px] font-bold text-gray-500 uppercase tracking-wider">
-                      互动 {projectInteractionsCount > 0 && `(${projectInteractionsCount})`}
+                      互动 {interactions.length > 0 && `(${interactions.length})`}
                     </span>
                   </button>
 
@@ -1210,7 +1299,7 @@ export default function StoryDetailView({ story, onClose, onUpdate, onDelete, cu
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[32px] z-[110] max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+              className="fixed bottom-0 left-0 right-0 lg:left-auto lg:right-0 lg:w-[40%] bg-white rounded-t-[32px] lg:rounded-none z-[110] h-[85vh] lg:h-full flex flex-col shadow-2xl overflow-hidden"
             >
               <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                 <div className="flex items-center space-x-2">

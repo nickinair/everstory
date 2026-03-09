@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:frontend": "vite --port=3000 --host=0.0.0.0",
-    "dev:backend": "node server.js",
+    "dev:backend": "node --watch server.js",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "vite build",
     "preview": "vite preview",

@@ -111,42 +111,32 @@ export default function StoriesView({
           >
             {story.type === 'video' ? (
               <div className="w-full h-full relative">
-                {story.imageUrl && story.imageUrl !== '' ? (
-                  <img
-                    src={story.imageUrl}
-                    alt={story.title}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <video
-                    src={`${story.videoUrl}#t=0.001`}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                )}
+                <VideoThumbnail
+                  imageUrl={story.imageUrl}
+                  videoUrl={story.videoUrl}
+                  title={story.title}
+                />
                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
               </div>
             ) : (
               story.imageUrl && (story.imageUrl.startsWith('http') || story.imageUrl.startsWith('/')) ? (
                 <img
-                  src={story.imageUrl}
+                  src={databaseService.getMediaProxyUrl(story.imageUrl)}
                   alt={story.title}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
+                    const target = e.target as HTMLImageElement;
                     if (story.type === 'audio') {
-                      (e.target as HTMLImageElement).src = '/audio_cover.png';
+                      target.src = '/audio_cover.png';
                     } else {
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      target.parentElement!.innerHTML = '<div class="w-full h-full bg-stone-100 flex items-center justify-center"><div class="w-8 h-8 text-stone-400">?</div></div>';
                     }
                   }}
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-stone-100 to-stone-200 flex items-center justify-center">
-                  <Mic className="w-8 h-8 text-stone-400" />
+                <div className="w-full h-full bg-[#0d1b1e] flex items-center justify-center p-8">
+                  <img src="/audio_cover.png" className="w-full h-full object-contain opacity-80" alt="Audio Cover" />
                 </div>
               )
             )}
@@ -195,6 +185,33 @@ export default function StoriesView({
         members={members}
       />
     </div>
+  );
+}
+
+function VideoThumbnail({ imageUrl, videoUrl, title }: { imageUrl?: string; videoUrl?: string; title: string }) {
+  const [useVideoFallback, setUseVideoFallback] = useState(!imageUrl || imageUrl === '');
+
+  if (useVideoFallback) {
+    return (
+      <video
+        key={videoUrl}
+        src={(videoUrl ? databaseService.getMediaProxyUrl(videoUrl) : '') + '#t=0.001'}
+        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+        muted
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl ? databaseService.getMediaProxyUrl(imageUrl) : ''}
+      alt={title}
+      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+      referrerPolicy="no-referrer"
+      onError={() => setUseVideoFallback(true)}
+    />
   );
 }
 
